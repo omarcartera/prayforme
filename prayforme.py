@@ -33,7 +33,7 @@ signal.signal(signal.SIGINT, signal.SIG_DFL)
 image_path = '/home/omarcartera/Desktop/prayforme/eggs.svg'
 
 next_prayer = ''
-actually = ''
+actual_date = ''
 delta = ''
 times = []
 prayers = []
@@ -75,26 +75,18 @@ def quit(source):
 
 # should pop a notification to tell the remaining time
 def what_is_next(source):
-	global image_path, next_prayer, actually, times, prayers
+	global image_path, next_prayer, actual_date, times, prayers
 
 	# to get the current time
-	now = get_current_time()
-
-	now_in_minutes = time_to_min(str(now)[11:16])
-	
-	times.remove(times[prayers.index(next_prayer)])
-	times.append(now_in_minutes)
-	times.sort()
-
-	print(times)
+	now_in_minutes = get_now_in_minutes()
 
 	delta = times[(times.index(now_in_minutes) + 1) % 6] - times[times.index(now_in_minutes)]
 
-	subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'Next Prayer is ' + next_prayer + ' ' + actually, 'Time to Adhan: ' + min_to_time(delta)])
-	print('Next Prayer is ' + next_prayer + ' ' + actually, 'Time to Adhan: ' + min_to_time(delta))
+	subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'Next Prayer is ' + next_prayer + ' ' + actual_date, 'Time to Adhan: ' + min_to_time(delta)])
+	print('Next Prayer is ' + next_prayer + ' ' + actual_date, 'Time to Adhan: ' + min_to_time(delta))
 
 
-def print_delta(times, prayers, actually):
+def print_delta(times, prayers, actual_date):
 	global delta, now, next_prayer
 
 	time.sleep(1)
@@ -102,25 +94,15 @@ def print_delta(times, prayers, actually):
 	polling_time = 5
 
 	while True:
-		try:
-			times.remove(now_in_minutes)
-		except:
-			print('ERROR')
-
 		# to get the current time
-		now = get_current_time()
+		now_in_minutes = get_now_in_minutes()
 
-		now_in_minutes = time_to_min(str(now)[11:16])
-		times.append(now_in_minutes)
-		times.sort()
-
-		print(times)
 		print([min_to_time(x) for x in times])
 
 		next_prayer = prayers[times.index(now_in_minutes)%5]
 		
 		if next_prayer == 'Isha':
-			boxboxbox = True
+			need_tomorrows_timings = True
 
 		print(next_prayer)
 
@@ -133,29 +115,45 @@ def print_delta(times, prayers, actually):
 		print(min_to_time(delta))
 
 		if delta == 0:
-			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'It is time for ' + next_prayer + ' ' + actually])
+			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'It is time for ' + next_prayer + ' ' + actual_date])
 			print('We Can Pray ' + next_prayer + ' Now')
 			polling_time = 60/6
 
-			if boxboxbox == True:
+			if need_tomorrows_timings:
 				get_prayer_times(0)
-				boxboxbox = False
+				need_tomorrows_timings = False
 
 		elif delta <= 120:
-			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'Next Prayer is ' + next_prayer + ' ' + actually, 'Time to Adhan: ' + min_to_time(delta)])
+			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'Next Prayer is ' + next_prayer + ' ' + actual_date, 'Time to Adhan: ' + min_to_time(delta)])
 			print('Next Prayer is ' + next_prayer + '\nTime to Adhan: ' + min_to_time(delta))
 			polling_time = (delta/3) * 60
 
 		else:
-			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'Next Prayer is ' + next_prayer + ' ' + actually, 'Time to Adhan: ' + min_to_time(delta)])
+			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'Next Prayer is ' + next_prayer + ' ' + actual_date, 'Time to Adhan: ' + min_to_time(delta)])
 			polling_time = (delta - 120) * 60
 
 		time.sleep(polling_time)
 
 # get current time
-def get_current_time():
+def get_now_in_minutes():
 	# to get the current time
-	return datetime.datetime.now()
+	now = datetime.datetime.now()
+
+	now_in_minutes = time_to_min(str(now)[11:16])
+	
+	try:
+		times.remove(times[prayers.index(next_prayer)])
+
+	except:
+		print('Error')
+
+	times.append(now_in_minutes)
+	times.sort()
+
+	print(times)
+
+	return now_in_minutes
+
 
 # convert hh:mm to integer minutes
 def time_to_min(time):
@@ -173,10 +171,10 @@ def get_location_data():
 
 # get prayer times for a complete month
 def get_prayer_times(after_isha = 1):
-	global actually, times, prayers
+	global actual_date, times, prayers
 
 	# to get the current time
-	now = get_current_time()
+	now = datetime.datetime.now()
 
 	# initial implementation to get tomorrows prayers
 	if now.hour > 19:
@@ -194,7 +192,7 @@ def get_prayer_times(after_isha = 1):
 	data = (requests.get(url, params=payload)).json()
 
 	# actual date of these timings, for debugging
-	actually = data['data'][now.day - after_isha]['date']['readable']
+	actual_date = data['data'][now.day - after_isha]['date']['readable']
 
 	prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
 	times = []
@@ -204,9 +202,12 @@ def get_prayer_times(after_isha = 1):
 		times[i] = time_to_min(str(times[i]))
 
 	# a thread to monitor the remaining time for the next prayer
-	_thread.start_new_thread(print_delta, (times, prayers, str(actually),))
+	_thread.start_new_thread(print_delta, (times, prayers, str(actual_date),))
 
+# wait 5 seconds after startup before starting
+time.sleep(5)
 
+# get the prayers timing sheet
 get_prayer_times()
 
 # this blocks the main thread
