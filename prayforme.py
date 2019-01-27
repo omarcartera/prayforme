@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # for APIs GET
 import requests
 import json
@@ -30,6 +32,13 @@ signal.signal(signal.SIGINT, signal.SIG_DFL)
 # image for app indicator icon and notification
 image_path = '/home/omarcartera/Desktop/prayforme/eggs.svg'
 
+next_prayer = ''
+actually = ''
+delta = ''
+times = []
+prayers = []
+
+
 # app indicator settings
 def main():
 	APPINDICATOR_ID = 'myappindicator'
@@ -53,7 +62,7 @@ def build_menu():
 	menu.append(item_quit)
 
 	# asking for the time remaining for the next prayer
-	item_next = gtk.MenuItem('Next')
+	item_next = gtk.MenuItem('Next Prayer?')
 	item_next.connect('activate', what_is_next)
 	menu.append(item_next)
 
@@ -66,13 +75,30 @@ def quit(source):
 
 # should pop a notification to tell the remaining time
 def what_is_next(source):
-	print('Nothing till now')
+	global image_path, next_prayer, actually, times, prayers
 
-# 
+	# to get the current time
+	now = get_current_time()
+
+	now_in_minutes = time_to_min(str(now)[11:16])
+	
+	times.remove(times[prayers.index(next_prayer)])
+	times.append(now_in_minutes)
+	times.sort()
+
+	print(times)
+
+	delta = times[(times.index(now_in_minutes) + 1) % 6] - times[times.index(now_in_minutes)]
+
+	subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'Next Prayer is ' + next_prayer + ' ' + actually, 'Time to Adhan: ' + min_to_time(delta)])
+	print('Next Prayer is ' + next_prayer + ' ' + actually, 'Time to Adhan: ' + min_to_time(delta))
+
+
 def print_delta(times, prayers, actually):
+	global delta, now, next_prayer
+
 	time.sleep(1)
 
-	not_notified = True
 	polling_time = 5
 
 	while True:
@@ -82,7 +108,7 @@ def print_delta(times, prayers, actually):
 			print('ERROR')
 
 		# to get the current time
-		now = datetime.datetime.now()
+		now = get_current_time()
 
 		now_in_minutes = time_to_min(str(now)[11:16])
 		times.append(now_in_minutes)
@@ -106,26 +132,30 @@ def print_delta(times, prayers, actually):
 		print(delta)
 		print(min_to_time(delta))
 
-		if not_notified:
-			if delta == 0:
-				subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'It is time for ' + next_prayer + ' ' + actually])
-				print('We Can Pray ' + next_prayer + ' Now')
-				polling_time = 60/6
+		if delta == 0:
+			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'It is time for ' + next_prayer + ' ' + actually])
+			print('We Can Pray ' + next_prayer + ' Now')
+			polling_time = 60/6
 
-				if boxboxbox == True:
-					get_prayer_times(0)
-					boxboxbox = False
+			if boxboxbox == True:
+				get_prayer_times(0)
+				boxboxbox = False
 
-			elif delta <= 120:
-				subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'Next Prayer is ' + next_prayer + ' ' + actually, 'Time to Adhan: ' + min_to_time(delta)])
-				print('Next Prayer is ' + next_prayer + '\nTime to Adhan: ' + min_to_time(delta))
-				polling_time = (delta/3) * 60
+		elif delta <= 120:
+			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'Next Prayer is ' + next_prayer + ' ' + actually, 'Time to Adhan: ' + min_to_time(delta)])
+			print('Next Prayer is ' + next_prayer + '\nTime to Adhan: ' + min_to_time(delta))
+			polling_time = (delta/3) * 60
 
-			else:
-				subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'Next Prayer is ' + next_prayer + ' ' + actually, 'Time to Adhan: ' + min_to_time(delta)])
-				polling_time = (delta - 120) * 60
+		else:
+			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'Next Prayer is ' + next_prayer + ' ' + actually, 'Time to Adhan: ' + min_to_time(delta)])
+			polling_time = (delta - 120) * 60
 
 		time.sleep(polling_time)
+
+# get current time
+def get_current_time():
+	# to get the current time
+	return datetime.datetime.now()
 
 # convert hh:mm to integer minutes
 def time_to_min(time):
@@ -143,8 +173,10 @@ def get_location_data():
 
 # get prayer times for a complete month
 def get_prayer_times(after_isha = 1):
+	global actually, times, prayers
+
 	# to get the current time
-	now = datetime.datetime.now()
+	now = get_current_time()
 
 	# initial implementation to get tomorrows prayers
 	if now.hour > 19:
