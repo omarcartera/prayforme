@@ -19,6 +19,9 @@ import _thread
 # to handle the incoming signals to this process
 import signal
 
+# for hotkey detection
+from pynput import keyboard
+
 # for the app indicator n ubuntu main bar
 from gi.repository import Gtk as gtk
 from gi.repository import AppIndicator3 as appindicator
@@ -38,6 +41,10 @@ delta = ''
 times = []
 prayers = []
 
+
+COMBINATIONS = [{keyboard.Key.shift, keyboard.Key.ctrl, keyboard.Key.space}]
+
+current = set()
 
 # app indicator settings
 def main():
@@ -204,8 +211,43 @@ def get_prayer_times(after_isha = 1):
 	# a thread to monitor the remaining time for the next prayer
 	_thread.start_new_thread(print_delta, (times, prayers, str(actual_date),))
 
+
+def on_press(key):
+	if any([key in COMBO for COMBO in COMBINATIONS]):
+		current.add(key)
+
+		if any(all(k in current for k in COMBO) for COMBO in COMBINATIONS):
+			hotkey_execute()
+
+
+def on_release(key):
+	if any([key in COMBO for COMBO in COMBINATIONS]):
+		current.remove(key)
+
+
+def hotkey_execute():
+	global image_path, next_prayer, actual_date, times, prayers
+
+	# to get the current time
+	now_in_minutes = get_now_in_minutes()
+
+	delta = times[(times.index(now_in_minutes) + 1) % 6] - times[times.index(now_in_minutes)]
+
+	subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'Next Prayer is ' + next_prayer + ' ' + actual_date, 'Time to Adhan: ' + min_to_time(delta)])
+	print('Next Prayer is ' + next_prayer + ' ' + actual_date, 'Time to Adhan: ' + min_to_time(delta))
+
+
+def listener_fn():
+	with keyboard.Listener(on_press = on_press, on_release = on_release) as listener:
+		listener.join()
+
+
 # wait 5 seconds after startup before starting
 time.sleep(5)
+
+
+_thread.start_new_thread(listener_fn, ())
+
 
 # get the prayers timing sheet
 get_prayer_times()
