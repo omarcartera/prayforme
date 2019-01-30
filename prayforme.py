@@ -31,38 +31,42 @@ from gi.repository import AppIndicator3 as appindicator
 
 from gi.repository import Notify as notify
 
-# starting pygame
-pygame.init()
 
-# to make it responsive to CTRL + C signal
-# put IGN instead of DFL to ignore the CTRL + C
-signal.signal(signal.SIGINT, signal.SIG_DFL)
-
-# image for app indicator icon and notification
-image_path = '/home/omarcartera/Desktop/prayforme/egg.svg'
-
-# a ton of hijo de putas global variables
-next_prayer = ''
-actual_date = ''
-delta = ''
-times = []
-prayers = []
-
-indicator = ''
-item_mute = ''
-item_5alas = ''
-
-fajr_correction = 1
-
-source = ''
-
-salleet = False
-
+##### CONSTANTS #####
 # combinations of hotkeys to be detected
 COMBINATIONS = [{keyboard.Key.shift, keyboard.Key.ctrl, keyboard.Key.space}]
 
 # to initialize hot key thing
 current = set()
+	
+# basic path for images
+path = '/home/omarcartera/Desktop/prayforme/'
+
+next_prayer_msg = 'Next Prayer is {0} {1}'
+adhan_msg       = 'Time to Adhan: {0}'
+prayer_time_msg = 'It is time for {0} {1}'
+#####################
+
+
+##### GLOBALS #####
+# image for app indicator icon and notification
+image_path = path + 'egg.svg'
+
+# a ton of hijo de putas global variables
+next_prayer = ''
+delta = ''
+
+indicator = ''
+item_mute = ''
+
+muted = False
+
+fajr_correction = 1
+
+source = ''
+###################
+
+
 
 # app indicator settings
 def gtk_main():
@@ -80,7 +84,7 @@ def gtk_main():
 
 
 def build_menu():
-	global item_mute, item_5alas
+	global item_mute
 
 	# creating a menu in app indicator
 	menu = gtk.Menu()
@@ -100,11 +104,6 @@ def build_menu():
 	item_mute.connect('activate', mute)
 	menu.append(item_mute)
 
-	# mute/unmute the notifications
-	item_5alas = gtk.MenuItem('Salleet 5alas')
-	item_5alas.connect('activate', salleet_5alas)
-	menu.append(item_5alas)
-
 	menu.show_all()
 
 	return menu
@@ -116,31 +115,22 @@ def quit(source):
 
 
 def mute(source):
-	global image_path, indicator, item_mute, item_5alas
+	global image_path, indicator, item_mute, muted
 
-	if image_path[-5] == 'g':
-		image_path = '/home/omarcartera/Desktop/prayforme/mute.png'
+	if not muted:
+		image_path = path + 'mute.png'
 		indicator.set_icon(image_path)
 		item_mute.set_label('Unmute')
 
+		muted = not muted
+
 	else:
-		image_path = '/home/omarcartera/Desktop/prayforme/egg.svg'
+		image_path = path + 'egg.svg'
 		indicator.set_icon(image_path)
 		item_mute.set_label('Mute')
 
+		muted = not muted
 
-def salleet_5alas(source):
-	global image_path, indicator, item_5alas, next_prayer, salleet
-
-	if salleet == False:
-		image_path = '/home/omarcartera/Desktop/prayforme/5alas.png'
-		indicator.set_icon(image_path)
-		item_5alas.set_label('Mashy')
-
-		salleet = True
-
-		pygame.mixer.Sound('congratulations.wav').play()
-		subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'Taqabbal Allah ya Alby ', 'There are no reminders until ' + next_prayer])
 
 # should pop a notification to tell the remaining time
 def what_is_next(source):
@@ -153,12 +143,12 @@ def what_is_next(source):
 
 	delta = get_delta(now_in_minutes)
 
-	subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'Next Prayer is ' + next_prayer + ' ' + actual_date, 'Time to Adhan: ' + min_to_time(delta)])
-	print('Next Prayer is ' + next_prayer + ' ' + actual_date, 'Time to Adhan: ' + min_to_time(delta))
+	subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta))])
+	print(next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta)))
 
 
 def prayer_reminder(times, prayers, actual_date):
-	global delta, now, next_prayer, item_5alas, indicator, salleet, image_path
+	global delta, now, next_prayer, indicator, image_path, muted
 
 	time.sleep(1)
 
@@ -168,56 +158,52 @@ def prayer_reminder(times, prayers, actual_date):
 
 	while True:
 		# to get the current time
-		now_in_minutes = get_now_in_minutes()
+		now_in_minutes = get_now_in_minutes(times)
 
 		next_prayer = prayers[times.index(now_in_minutes) % 5]
 
 		# an initail correction to Isha-Midnight-Fajr problem
 		if next_prayer == 'Fajr' and not corrected:
 			get_prayer_times(0)
-			now_in_minutes = get_now_in_minutes()
+			now_in_minutes = get_now_in_minutes(times)
 			corrected = True
 
-		else:
+		elif next_prayer != 'Fajr' and corrected:
 			corrected = False
 
 		# get the time difference between now and next prayer
-		delta = get_delta(now_in_minutes)
+		delta = get_delta(now_in_minutes, times)
 
-		if not salleet:
+		if not muted:
 			# play notification sound
 			pygame.mixer.Sound('notification.wav').play()
 
-			if delta == 0:
-				subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'It is time for ' + next_prayer + ' ' + actual_date])
-				print('We Can Pray ' + next_prayer + ' Now')
-				polling_time = 60/6
+		if delta == 0:
+			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', prayer_time_msg.format(next_prayer, actual_date)])
+			polling_time = 60/6
 
-			elif delta <= 120:
-				subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'Next Prayer is ' + next_prayer + ' ' + actual_date, 'Time to Adhan: ' + min_to_time(delta)])
-				print('Next Prayer is ' + next_prayer + '\nTime to Adhan: ' + min_to_time(delta))
-				polling_time = (delta/3) * 60
+			print(prayer_time_msg.format(next_prayer, actual_date))
 
-			else:
-				subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', 'Next Prayer is ' + next_prayer + ' ' + actual_date, 'Time to Adhan: ' + min_to_time(delta)])
-				polling_time = (delta - 120) * 60
+		elif delta <= 120:
+			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta))])
+			polling_time = (delta/3) * 60
+
+			print(next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta)))
+			print('Now is: ', time.localtime()[3], time.localtime()[4])
+			print('Next alarm is at: ' + str(time.localtime()[3]) + ':' + str(int(time.localtime()[4] + polling_time/60)))
 
 		else:
-			polling_time = delta - 9
-			print(polling_time)
+			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta))])
+			polling_time = (delta - 120) * 60
+
+			print('Now is: ', time.localtime()[3], time.localtime()[4])
+			print('Next alarm is at: ' + str(time.localtime()[3]) + ':' + str(int(time.localtime()[4] + polling_time/60)))
 
 		time.sleep(polling_time)
 
-		salleet = False
-		item_5alas.set_label('Salleet 5alas')
-		image_path = '/home/omarcartera/Desktop/prayforme/egg.png'
-		indicator.set_icon(image_path)
-
 
 # get current time
-def get_now_in_minutes():
-	global times
-
+def get_now_in_minutes(times):
 	# to get the current time
 	now = datetime.datetime.now()
 
@@ -240,9 +226,7 @@ def get_now_in_minutes():
 	return now_in_minutes
 
 
-def get_delta(now_in_minutes):
-	global times
-
+def get_delta(now_in_minutes, times):
 	print('in delta', len(times))
 
 	delta = times[(times.index(now_in_minutes) + 1) % 6] - times[times.index(now_in_minutes)]
@@ -273,7 +257,8 @@ def get_location_data():
 
 # get prayer times for a complete month
 def get_prayer_times(fajr_correction = 1):
-	global actual_date, times, prayers
+	prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
+	times = []
 
 	# to get the current date and time
 	now = datetime.datetime.now()
@@ -289,11 +274,8 @@ def get_prayer_times(fajr_correction = 1):
 
 	response = (requests.get(url, params=payload)).json()
 
-	prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
-
-	times = []
-
 	print(len(times))
+	print(prayers)
 
 	for i in range(5):
 		times.append(str(response['data'][now.day - fajr_correction]['timings'][prayers[i]][:5]))
@@ -307,22 +289,19 @@ def get_prayer_times(fajr_correction = 1):
 
 	print('-' * 10)
 
+	return prayers, times, actual_date
+
 
 def on_press(key):
 	if any([key in COMBO for COMBO in COMBINATIONS]):
 		current.add(key)
 
 		if any(all(k in current for k in COMBO) for COMBO in COMBINATIONS):
-			hotkey_execute()
-
+			what_is_next(source)
 
 def on_release(key):
 	if any([key in COMBO for COMBO in COMBINATIONS]):
-		current.remove(key)
-
-
-def hotkey_execute():
-	what_is_next(source)
+		current.remove(key)	
 
 
 def listener_fn():
@@ -330,17 +309,31 @@ def listener_fn():
 		listener.join()
 
 
-# wait 5 seconds after startup before starting
-time.sleep(0)
 
-_thread.start_new_thread(listener_fn, ())
+##### MAIN #####
+def main():
+	# starting pygame
+	pygame.init()
+
+	# to make it responsive to CTRL + C signal
+	# put IGN instead of DFL to ignore the CTRL + C
+	signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+	# start the thread to listen for keyboard presses
+	_thread.start_new_thread(listener_fn, ())
+
+	# wait 5 seconds after startup before starting
+	time.sleep(5)
+
+	# get the prayers timing sheet
+	prayers, times, actual_date = get_prayer_times()
+
+	# a thread to monitor the remaining time for the next prayer
+	_thread.start_new_thread(prayer_reminder, (times, prayers, str(actual_date),))
+
+	# this blocks the main thread
+	source = gtk_main()
 
 
-# get the prayers timing sheet
-get_prayer_times()
-
-# a thread to monitor the remaining time for the next prayer
-_thread.start_new_thread(prayer_reminder, (times, prayers, str(actual_date),))
-
-# this blocks the main thread
-source = gtk_main()
+if __name__ == '__main__':
+    main()
