@@ -167,9 +167,9 @@ def prayer_reminder(times, prayers, actual_date):
 		# get the time difference between now and next prayer
 		delta = get_delta(now_in_minutes, times)
 
-		# if not muted:
+		if not muted:
 			# play notification sound
-			# pygame.mixer.Sound('notification.wav').play()
+			_thread.start_new_thread(play, ())
 
 		if delta == 0:
 			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', prayer_time_msg.format(next_prayer, actual_date)])
@@ -230,6 +230,9 @@ def get_delta(now_in_minutes, times):
 
 	return delta
 
+# to play notification sound
+def play():
+	subprocess.call(['aplay',  'notification.wav'])
 
 # convert hh:mm to integer minutes
 def time_to_min(time):
