@@ -77,6 +77,7 @@ def gtk_main():
 	gtk.main()
 
 
+# bulding the menu items
 def build_menu():
 	global item_mute
 
@@ -103,29 +104,29 @@ def build_menu():
 	return menu
 
 
-# alternative way to terminate correctly
+# alternative way to terminate the process
 def quit(source):
 	gtk.main_quit()
 
 
+# turn off the reminder notification sound
 def mute(source):
-	global image_path, indicator, item_mute, muted
+	global indicator, item_mute, muted
 
 	if not muted:
-		image_path = path + 'mute.png'
+		indicator.set_icon(path + 'mute.png')
 		label = 'Unmute'
 
 	else:
-		image_path = path + 'egg.svg'
+		indicator.set_icon(path + 'egg.svg')
 		label = 'Mute'
 
 	item_mute.set_label(label)
 	muted = not muted
-	indicator.set_icon(image_path)
-
 
 
 # should pop a notification to tell the remaining time
+### not functional now ###
 def what_is_next(source):
 	# global image_path, next_prayer, actual_date, times, prayers
 
@@ -136,7 +137,7 @@ def what_is_next(source):
 
 	now_in_minutes = 8
 
-	# delta = get_delta(now_in_minutes)
+	# delta = get_delta_time(now_in_minutes)
 
 	delta = 15
 	
@@ -144,64 +145,78 @@ def what_is_next(source):
 	print(next_prayer_msg.format(now_in_minutes, delta), adhan_msg.format(min_to_time(delta)))
 
 
+# pop notifications of time remaining to prayer
 def prayer_reminder(times, prayers, actual_date):
-	global now, next_prayer, indicator, image_path, muted
+	global next_prayer, indicator, image_path, muted
 
 	corrected = False
 
 	while True:
 		# to get the current time
-		now_in_minutes = get_now_in_minutes(times)
+		now_in_minutes = get_now_in_minutes(times, prayers)
 
 		next_prayer = prayers[times.index(now_in_minutes) % 5]
 
-		# an initail correction to Isha-Midnight-Fajr problem
+		# an initail solution to Isha-Midnight-Fajr problem
 		if next_prayer == 'Fajr' and not corrected:
 			_, times, actual_date = get_prayer_times(0)
-			now_in_minutes = get_now_in_minutes(times)
+			now_in_minutes = get_now_in_minutes(times, prayers)
 			corrected = True
 
 		elif next_prayer != 'Fajr' and corrected:
 			corrected = False
 
 		# get the time difference between now and next prayer
-		delta = get_delta(now_in_minutes, times)
+		delta = get_delta_time(now_in_minutes, times)
 
 		if not muted:
-			# play notification sound
+			# play notification sound in a temporary thread
+			# to be synced with the popup notification
 			_thread.start_new_thread(play, ())
 
+		# we can pray now
 		if delta == 0:
 			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', prayer_time_msg.format(next_prayer, actual_date)])
-			polling_time = 60/6
+			
+			# repeat every 15 seconds
+			polling_time = 60/4
 
 			print(prayer_time_msg.format(next_prayer, actual_date))
 
+		# anything less than 2 hours remaining
 		elif delta <= 120:
 			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta))])
+			
+			# repeat after (remaining time)/3 elapses
 			polling_time = (delta/3) * 60
 
 			print(next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta)))
 			print('Now is: ', time.localtime()[3], time.localtime()[4])
 			print('Next alarm is at: ' + min_to_time(time.localtime()[3] * 60 + time.localtime()[4] + polling_time/60))
 
+		# anything more than 2 hours remaining
 		else:
 			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta))])
+			
+			# sleep until it's 2 hours remaining
 			polling_time = (delta - 120) * 60
 
 			print('Now is: ', time.localtime()[3], time.localtime()[4])
 			print('Next alarm is at: ' + min_to_time(time.localtime()[3] * 60 + time.localtime()[4] + polling_time/60))
 
+		# process: running --> sleep
 		time.sleep(polling_time)
 
 
 # get current time
-def get_now_in_minutes(times):
+def get_now_in_minutes(times, prayers):
 	# to get the current time
 	now = datetime.datetime.now()
 
+	# to get the current time as integer minutes counted from 00:00
 	now_in_minutes = time_to_min(str(now)[11:16])
 	
+	# to remove the old current_time from the list
 	if len(times) > 5:
 		try:
 			if prayers.index(next_prayer) == 0:
@@ -209,30 +224,38 @@ def get_now_in_minutes(times):
 
 			else:
 				times.remove(times[prayers.index(next_prayer)])
+		
+		except Exception as e:
+			print('Error: ', e)
 
-		except:
-			print('Error')
-
+	# add the new current_time to the list
 	times.append(now_in_minutes)
+
+	# sorting will puth the current_time entry just before the next prayer
 	times.sort()
 
 	return now_in_minutes
 
 
-def get_delta(now_in_minutes, times):
-	print('in delta', len(times))
-
+# Delta Time: A term used to describe the time difference between
+# two different laps or two different cars. For example, there is
+# usually a negative delta between a driver's best practice lap time
+# and his best qualifying lap time because he uses a low fuel load and new tyres.
+def get_delta_time(now_in_minutes, times):
+	# getting delta, times is a circular list
 	delta = times[(times.index(now_in_minutes) + 1) % 6] - times[times.index(now_in_minutes)]
 
-
+	# if now is after isha, before midnight and next prayer is Fajr --> negative delta
 	if delta < 0:
 		delta = delta + 24 * 60
 
 	return delta
 
+
 # to play notification sound
 def play():
 	subprocess.call(['aplay',  'notification.wav'])
+
 
 # convert hh:mm to integer minutes
 def time_to_min(time):
@@ -251,7 +274,8 @@ def get_location_data():
 	country = ip_info['country']
 	city = ip_info['city']
 
-	ip_info = ''
+	# would this help?
+	del ip_info
 
 	return country, city
 
@@ -273,31 +297,22 @@ def get_prayer_times(fajr_correction = 1):
 	payload = {'country': country, 'city': city, 'month': now.month,
 			   'year': str(now.year), 'method': 3, 'midnightMode': 0 }
 
-	response = (requests.get(url, params=payload)).json()
-
-	print(len(times))
-	print(prayers)
+	response = ((requests.get(url, params=payload)).json())['data']
 
 	for i in range(5):
-		times.append(str(response['data'][now.day - fajr_correction]['timings'][prayers[i]][:5]))
-		print(str(times[i]))
+		times.append(str(response[now.day - fajr_correction]['timings'][prayers[i]][:5]))
 		times[i] = time_to_min(str(times[i]))
 
-	print(len(times))
 
-	print('Now - Fajr: ', now.day - fajr_correction)
 	# actual date of these timings, for debugging
-	actual_date = response['data'][now.day - fajr_correction]['date']['readable']
+	actual_date = response[now.day - fajr_correction]['date']['readable']
 
-	print(actual_date)
-
-	print('-' * 10)
-
-	response = ''
+	# would this help?
+	del response
 	
 	return prayers, times, actual_date
 
-
+# what to do when the buttons combination is pressed
 def on_press(key):
 	if any([key in COMBO for COMBO in COMBINATIONS]):
 		current.add(key)
@@ -305,11 +320,12 @@ def on_press(key):
 		if any(all(k in current for k in COMBO) for COMBO in COMBINATIONS):
 			what_is_next(source)
 
+# what to do when the buttons combination is released .. ahem
 def on_release(key):
 	if any([key in COMBO for COMBO in COMBINATIONS]):
 		current.remove(key)	
 
-
+# initialize the keyboard monitoring thread
 def listener_fn():
 	with keyboard.Listener(on_press, on_release) as listener:
 		listener.join()
