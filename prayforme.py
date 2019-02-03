@@ -28,6 +28,11 @@ from gi.repository import AppIndicator3 as appindicator
 
 from gi.repository import Notify as notify
 
+# to detect sleep and resume
+import dbus
+from gi.repository import GObject as gobject
+
+from dbus.mainloop.glib import DBusGMainLoop
 
 ##### CONSTANTS #####
 # combinations of hotkeys to be detected
@@ -155,6 +160,9 @@ def prayer_reminder(times, prayers, actual_date):
 		# to get the current time
 		now_in_minutes = get_now_in_minutes(times, prayers)
 
+		# get the time difference between now and next prayer
+		delta = get_delta_time(now_in_minutes, times)
+		
 		next_prayer = prayers[times.index(now_in_minutes) % 5]
 
 		# an initail solution to Isha-Midnight-Fajr problem
@@ -166,9 +174,6 @@ def prayer_reminder(times, prayers, actual_date):
 		elif next_prayer != 'Fajr' and corrected:
 			corrected = False
 
-		# get the time difference between now and next prayer
-		delta = get_delta_time(now_in_minutes, times)
-
 		if not muted:
 			# play notification sound in a temporary thread
 			# to be synced with the popup notification
@@ -176,13 +181,17 @@ def prayer_reminder(times, prayers, actual_date):
 
 		# we can pray now
 		if delta == 0:
-			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', prayer_time_msg.format(next_prayer, actual_date)])
+			for r in range(5):
+				subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', prayer_time_msg.format(next_prayer, actual_date)])
+
+				print(prayer_time_msg.format(next_prayer, actual_date))
+
+				# renotify every 20 seconds for 5 times
+				time.sleep(20)
+
+			mute(source)
+			polling_time = 0
 			
-			# repeat every 15 seconds
-			polling_time = 60/4
-
-			print(prayer_time_msg.format(next_prayer, actual_date))
-
 		# anything less than 2 hours remaining
 		elif delta <= 120:
 			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta))])
@@ -334,6 +343,8 @@ def listener_fn():
 
 ##### MAIN #####
 def main():
+	global source
+	
 	# to make it responsive to CTRL + C signal
 	# put IGN instead of DFL to ignore the CTRL + C
 	signal.signal(signal.SIGINT, signal.SIG_DFL)
