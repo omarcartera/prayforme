@@ -28,21 +28,18 @@ from gi.repository import AppIndicator3 as appindicator
 
 from gi.repository import Notify as notify
 
-# to detect sleep and resume
-import dbus
-from gi.repository import GObject as gobject
-
-from dbus.mainloop.glib import DBusGMainLoop
-
 ##### CONSTANTS #####
 # combinations of hotkeys to be detected
 COMBINATIONS = [{keyboard.Key.shift, keyboard.Key.ctrl, keyboard.Key.space}]
 
 # to initialize hot key thing
 current = set()
-	
+
+prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
+
 # basic path for images
 path = '/home/omarcartera/Desktop/prayforme/'
+image_path = path + 'egg.svg'
 
 next_prayer_msg = 'Next Prayer is {0} {1}'
 adhan_msg       = 'Time to Adhan: {0}'
@@ -52,17 +49,10 @@ prayer_time_msg = 'It is time for {0} {1}'
 
 ##### GLOBALS #####
 # image for app indicator icon and notification
-image_path = path + 'egg.svg'
-
-# a ton of hijo de putas global variables
-next_prayer = ''
-
 indicator = ''
 item_mute = ''
 
 muted = False
-
-source = ''
 ###################
 
 
@@ -115,69 +105,116 @@ def quit(source):
 
 
 # turn off the reminder notification sound
-def mute(source):
-	global indicator, item_mute, muted
+def mute(source = None):
+	global item_mute, muted
 
 	if not muted:
-		indicator.set_icon(path + 'mute.png')
+		image_path = path + 'mute.png'
 		label = 'Unmute'
 
 	else:
-		indicator.set_icon(path + 'egg.svg')
+		image_path = path + 'egg.svg'
 		label = 'Mute'
 
+
+	indicator.set_icon(image_path)
 	item_mute.set_label(label)
+
 	muted = not muted
 
 
-# should pop a notification to tell the remaining time
-### not functional now ###
-def what_is_next(source):
-	# global image_path, next_prayer, actual_date, times, prayers
-
-	# print(times)
+# pops a notification to tell the remaining time
+def what_is_next(source = 0):
+	# get the prayers timing sheet
+	times, actual_date = get_prayer_times()
 
 	# to get the current time
-	# now_in_minutes = get_now_in_minutes()
+	now_in_minutes = get_now_in_minutes()
 
-	now_in_minutes = 8
+	# # to remove the old current_time from the list
+	if len(times) > 5:
+		try:
+			# after isha but before midnight
+			if prayers.index(next_prayer) == 0:
+				times.pop()
 
-	# delta = get_delta_time(now_in_minutes)
+			# otherwise
+			else:
+				times.remove(times[prayers.index(next_prayer)])
+		
+		except Exception as e:
+			print('Error: ', e)
 
-	delta = 15
+	# add the new current_time to the list
+	times.append(now_in_minutes)
+
+	# sorting will puth the current_time entry just before the next prayer
+	times.sort()
+		
+	delta = get_delta_time(now_in_minutes, times)
 	
-	subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(now_in_minutes, delta), adhan_msg.format(min_to_time(delta))])
-	print(next_prayer_msg.format(now_in_minutes, delta), adhan_msg.format(min_to_time(delta)))
+	next_prayer = get_next_prayer(times, now_in_minutes)
+	
+	if muted:
+		image_path = path + 'mute.png'
+
+	else:
+		image_path = path + 'egg.svg'
+
+	subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta))])
+	print(next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta)))
 
 
 # pop notifications of time remaining to prayer
-def prayer_reminder(times, prayers, actual_date):
-	global next_prayer, indicator, image_path, muted
-
-	corrected = False
+def prayer_reminder(times, actual_date, corrected = False):
+	global muted
 
 	while True:
 		# to get the current time
-		now_in_minutes = get_now_in_minutes(times, prayers)
+		now_in_minutes = get_now_in_minutes()
+
+		# # to remove the old current_time from the list
+		if len(times) > 5:
+			try:
+				# after isha but before midnight
+				if prayers.index(next_prayer) == 0:
+					times.pop()
+
+				# otherwise
+				else:
+					times.remove(times[prayers.index(next_prayer)])
+			
+			except Exception as e:
+				print('Error: ', e)
+
+		# add the new current_time to the list
+		times.append(now_in_minutes)
+
+		# sorting will puth the current_time entry just before the next prayer
+		times.sort()
 
 		# get the time difference between now and next prayer
 		delta = get_delta_time(now_in_minutes, times)
 		
-		next_prayer = prayers[times.index(now_in_minutes) % 5]
+		next_prayer = get_next_prayer(times, now_in_minutes)
 
 		# an initail solution to Isha-Midnight-Fajr problem
 		if next_prayer == 'Fajr' and not corrected:
-			_, times, actual_date = get_prayer_times(0)
-			now_in_minutes = get_now_in_minutes(times, prayers)
+			times, actual_date = get_prayer_times(0)
+			now_in_minutes = get_now_in_minutes(times)
 			corrected = True
 
 		elif next_prayer != 'Fajr' and corrected:
 			corrected = False
 
-		if not muted:
+		if muted:
+			image_path = path + 'mute.png'
+
+		else:
 			# play notification sound in a temporary thread
 			# to be synced with the popup notification
 			_thread.start_new_thread(play, ())
+			image_path = path + 'egg.svg'
 
 		# we can pray now
 		if delta == 0:
@@ -189,7 +226,7 @@ def prayer_reminder(times, prayers, actual_date):
 				# renotify every 20 seconds for 5 times
 				time.sleep(20)
 
-			mute(source)
+			mute()
 			polling_time = 0
 			
 		# anything less than 2 hours remaining
@@ -218,30 +255,12 @@ def prayer_reminder(times, prayers, actual_date):
 
 
 # get current time
-def get_now_in_minutes(times, prayers):
+def get_now_in_minutes():
 	# to get the current time
 	now = datetime.datetime.now()
 
 	# to get the current time as integer minutes counted from 00:00
 	now_in_minutes = time_to_min(str(now)[11:16])
-	
-	# to remove the old current_time from the list
-	if len(times) > 5:
-		try:
-			if prayers.index(next_prayer) == 0:
-				times.pop()
-
-			else:
-				times.remove(times[prayers.index(next_prayer)])
-		
-		except Exception as e:
-			print('Error: ', e)
-
-	# add the new current_time to the list
-	times.append(now_in_minutes)
-
-	# sorting will puth the current_time entry just before the next prayer
-	times.sort()
 
 	return now_in_minutes
 
@@ -261,19 +280,8 @@ def get_delta_time(now_in_minutes, times):
 	return delta
 
 
-# to play notification sound
-def play():
-	subprocess.call(['aplay',  'notification.wav'])
-
-
-# convert hh:mm to integer minutes
-def time_to_min(time):
-	return int(time[:2]) * 60 + int(time[3:])
-
-
-# convert integer minutes to hh:mm
-def min_to_time(min):
-	return str(int((min/60)%24)).zfill(2) + ':' + str(int(min%60)).zfill(2)
+def get_next_prayer(times, now_in_minutes):
+	return prayers[times.index(now_in_minutes) % 5]
 
 
 # get your current location based on your public IP
@@ -291,7 +299,6 @@ def get_location_data():
 
 # get prayer times for a complete month
 def get_prayer_times(fajr_correction = 1):
-	prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
 	times = []
 
 	# to get the current date and time
@@ -319,7 +326,23 @@ def get_prayer_times(fajr_correction = 1):
 	# would this help?
 	del response
 	
-	return prayers, times, actual_date
+	return times, actual_date
+
+
+# to play notification sound
+def play():
+	subprocess.call(['aplay',  'notification.wav'])
+
+
+# convert hh:mm to integer minutes
+def time_to_min(time):
+	return int(time[:2]) * 60 + int(time[3:])
+
+
+# convert integer minutes to hh:mm
+def min_to_time(min):
+	return str(int((min/60)%24)).zfill(2) + ':' + str(int(min%60)).zfill(2)
+
 
 # what to do when the buttons combination is pressed
 def on_press(key):
@@ -327,7 +350,7 @@ def on_press(key):
 		current.add(key)
 
 		if any(all(k in current for k in COMBO) for COMBO in COMBINATIONS):
-			what_is_next(source)
+			what_is_next()
 
 # what to do when the buttons combination is released .. ahem
 def on_release(key):
@@ -340,11 +363,8 @@ def listener_fn():
 		listener.join()
 
 
-
 ##### MAIN #####
-def main():
-	global source
-	
+def main():	
 	# to make it responsive to CTRL + C signal
 	# put IGN instead of DFL to ignore the CTRL + C
 	signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -356,15 +376,15 @@ def main():
 	time.sleep(5)
 
 	# get the prayers timing sheet
-	prayers, times, actual_date = get_prayer_times()
+	times, actual_date = get_prayer_times()
 
 	time.sleep(1)
 
 	# a thread to monitor the remaining time for the next prayer
-	_thread.start_new_thread(prayer_reminder, (times, prayers, str(actual_date),))
+	_thread.start_new_thread(prayer_reminder, (times, str(actual_date),))
 
 	# this blocks the main thread
-	source = gtk_main()
+	gtk_main()
 
 if __name__ == '__main__':
     main()
