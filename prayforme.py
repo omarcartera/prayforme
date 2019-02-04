@@ -55,8 +55,6 @@ item_mute = ''
 muted = False
 ###################
 
-
-
 # app indicator settings
 def gtk_main():
 	global indicator
@@ -126,26 +124,15 @@ def mute(source = None):
 # pops a notification to tell the remaining time
 def what_is_next(source = 0):
 	# get the prayers timing sheet
-	times, actual_date = get_prayer_times()
+	with open('prayers.json', 'r') as prayers_file:
+		data = json.load(prayers_file)
+
+	times = data['times']
+	actual_date = data['actual_date']
 
 	# to get the current time
 	now_in_minutes = get_now_in_minutes()
 
-	# # to remove the old current_time from the list
-	if len(times) > 5:
-		try:
-			# after isha but before midnight
-			if prayers.index(next_prayer) == 0:
-				times.pop()
-
-			# otherwise
-			else:
-				times.remove(times[prayers.index(next_prayer)])
-		
-		except Exception as e:
-			print('Error: ', e)
-
-	# add the new current_time to the list
 	times.append(now_in_minutes)
 
 	# sorting will puth the current_time entry just before the next prayer
@@ -166,26 +153,19 @@ def what_is_next(source = 0):
 
 
 # pop notifications of time remaining to prayer
-def prayer_reminder(times, actual_date, corrected = False):
+def prayer_reminder(corrected = False):
 	global muted
 
 	while True:
+		# get the prayers timing sheet
+		with open('prayers.json', 'r') as prayers_file:
+			data = json.load(prayers_file)
+
+		times = data['times']
+		actual_date = data['actual_date']
+
 		# to get the current time
 		now_in_minutes = get_now_in_minutes()
-
-		# # to remove the old current_time from the list
-		if len(times) > 5:
-			try:
-				# after isha but before midnight
-				if prayers.index(next_prayer) == 0:
-					times.pop()
-
-				# otherwise
-				else:
-					times.remove(times[prayers.index(next_prayer)])
-			
-			except Exception as e:
-				print('Error: ', e)
 
 		# add the new current_time to the list
 		times.append(now_in_minutes)
@@ -286,13 +266,18 @@ def get_next_prayer(times, now_in_minutes):
 
 # get your current location based on your public IP
 def get_location_data():
-	ip_info = (requests.get('http://ipinfo.io/json')).json()
+	try:
+		ip_info = (requests.get('http://ipinfo.io/json')).json()
+
+	except:
+		print('**********************************')
+		print('*No internet, sorry. Arrivederci!*')
+		print('**********************************')
+
+		exit()
 
 	country = ip_info['country']
 	city = ip_info['city']
-
-	# would this help?
-	del ip_info
 
 	return country, city
 
@@ -313,7 +298,15 @@ def get_prayer_times(fajr_correction = 1):
 	payload = {'country': country, 'city': city, 'month': now.month,
 			   'year': str(now.year), 'method': 3, 'midnightMode': 0 }
 
-	response = ((requests.get(url, params=payload)).json())['data']
+	try:
+		response = ((requests.get(url, params=payload)).json())['data']
+
+	except:
+		print('**********************************')
+		print('*No internet, sorry. Arrivederci!*')
+		print('**********************************')
+	
+		exit()
 
 	for i in range(5):
 		times.append(str(response[now.day - fajr_correction]['timings'][prayers[i]][:5]))
@@ -323,11 +316,11 @@ def get_prayer_times(fajr_correction = 1):
 	# actual date of these timings, for debugging
 	actual_date = response[now.day - fajr_correction]['date']['readable']
 
-	# would this help?
-	del response
-	
-	return times, actual_date
+	dic = {'times': times, 'actual_date': actual_date}
 
+	with open('prayers.json', 'w') as prayers_file:
+		json.dump(dic, prayers_file)
+	
 
 # to play notification sound
 def play():
@@ -373,15 +366,15 @@ def main():
 	_thread.start_new_thread(listener_fn, ())
 
 	# wait 5 seconds after startup before starting
-	time.sleep(5)
+	# time.sleep(5)
 
-	# get the prayers timing sheet
-	times, actual_date = get_prayer_times()
+	time.sleep(0.5)
 
-	time.sleep(1)
+	# put the prayer times in the json
+	get_prayer_times()
 
 	# a thread to monitor the remaining time for the next prayer
-	_thread.start_new_thread(prayer_reminder, (times, str(actual_date),))
+	_thread.start_new_thread(prayer_reminder, ())
 
 	# this blocks the main thread
 	gtk_main()
