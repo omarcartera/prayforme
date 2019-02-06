@@ -13,6 +13,9 @@ import subprocess
 # for the time delay
 import time
 
+# for path fetching
+import os
+
 # threading
 import _thread
 
@@ -38,8 +41,11 @@ current = set()
 prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
 
 # basic path for images
-path = '/home/omarcartera/Desktop/prayforme/'
+path = 	os.getcwd() + '/'
+
 image_path = path + 'egg.svg'
+
+notification_path = os.getcwd() + '/' + 'notification.wav'
 
 next_prayer_msg = 'Next Prayer is {0} {1}'
 adhan_msg       = 'Time to Adhan: {0}'
@@ -106,14 +112,13 @@ def quit(source):
 def mute(source = None):
 	global item_mute, muted
 
-	if not muted:
-		image_path = path + 'mute.png'
-		label = 'Unmute'
-
-	else:
+	if muted:
 		image_path = path + 'egg.svg'
 		label = 'Mute'
 
+	else:
+		image_path = path + 'mute.png'
+		label = 'Unmute'
 
 	indicator.set_icon(image_path)
 	item_mute.set_label(label)
@@ -180,10 +185,17 @@ def prayer_reminder(corrected = False):
 
 		# an initail solution to Isha-Midnight-Fajr problem
 		if next_prayer == 'Fajr' and not corrected:
-			times, actual_date = get_prayer_times(0)
-			now_in_minutes = get_now_in_minutes(times)
+			get_prayer_times(0)
+			now_in_minutes = get_now_in_minutes()
 			corrected = True
 
+			# get the prayers timing sheet
+			with open('prayers.json', 'r') as prayers_file:
+				data = json.load(prayers_file)
+
+				times = data['times']
+				actual_date = data['actual_date']
+			
 		elif next_prayer != 'Fajr' and corrected:
 			corrected = False
 
@@ -195,6 +207,7 @@ def prayer_reminder(corrected = False):
 			# to be synced with the popup notification
 			_thread.start_new_thread(play, ())
 			image_path = path + 'egg.svg'
+
 
 		# we can pray now
 		if delta == 0:
@@ -324,7 +337,7 @@ def get_prayer_times(fajr_correction = 1):
 
 # to play notification sound
 def play():
-	subprocess.call(['aplay',  'notification.wav'])
+	subprocess.call(['aplay',  notification_path])
 
 
 # convert hh:mm to integer minutes
@@ -357,16 +370,13 @@ def listener_fn():
 
 
 ##### MAIN #####
-def main():	
+def main():
 	# to make it responsive to CTRL + C signal
 	# put IGN instead of DFL to ignore the CTRL + C
 	signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 	# start the thread to listen for keyboard presses
 	_thread.start_new_thread(listener_fn, ())
-
-	# wait 5 seconds after startup before starting
-	# time.sleep(5)
 
 	time.sleep(0.5)
 
@@ -380,4 +390,6 @@ def main():
 	gtk_main()
 
 if __name__ == '__main__':
-    main()
+	# wait 5 seconds after startup before starting
+	time.sleep(5)
+	main()
