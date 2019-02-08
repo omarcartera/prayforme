@@ -31,6 +31,7 @@ from gi.repository import AppIndicator3 as appindicator
 
 from gi.repository import Notify as notify
 
+
 ##### CONSTANTS #####
 # combinations of hotkeys to be detected
 COMBINATIONS = [{keyboard.Key.shift, keyboard.Key.ctrl, keyboard.Key.space}]
@@ -41,11 +42,11 @@ current = set()
 prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
 
 # basic path for images
-path = 	os.getcwd() + '/'
+path = 	'/home/omarcartera/Desktop/prayforme/'
 
 image_path = path + 'egg.svg'
 
-notification_path = os.getcwd() + '/' + 'notification.wav'
+notification_path = '/home/omarcartera/Desktop/prayforme/notification.wav'
 
 next_prayer_msg = 'Next Prayer is {0} {1}'
 adhan_msg       = 'Time to Adhan: {0}'
@@ -129,7 +130,7 @@ def mute(source = None):
 # pops a notification to tell the remaining time
 def what_is_next(source = 0):
 	# get the prayers timing sheet
-	with open('prayers.json', 'r') as prayers_file:
+	with open(path + 'prayers.json', 'r') as prayers_file:
 		data = json.load(prayers_file)
 
 	times = data['times']
@@ -163,7 +164,7 @@ def prayer_reminder(corrected = False):
 
 	while True:
 		# get the prayers timing sheet
-		with open('prayers.json', 'r') as prayers_file:
+		with open(path + 'prayers.json', 'r') as prayers_file:
 			data = json.load(prayers_file)
 
 		times = data['times']
@@ -190,7 +191,7 @@ def prayer_reminder(corrected = False):
 			corrected = True
 
 			# get the prayers timing sheet
-			with open('prayers.json', 'r') as prayers_file:
+			with open(path + 'prayers.json', 'r') as prayers_file:
 				data = json.load(prayers_file)
 
 				times = data['times']
@@ -279,15 +280,19 @@ def get_next_prayer(times, now_in_minutes):
 
 # get your current location based on your public IP
 def get_location_data():
-	try:
-		ip_info = (requests.get('http://ipinfo.io/json')).json()
+	connected = False
 
-	except:
-		print('**********************************')
-		print('*No internet, sorry. Arrivederci!*')
-		print('**********************************')
+	while not connected:
+		try:
+			ip_info = (requests.get('http://ipinfo.io/json')).json()
+			connected = True
 
-		exit()
+		except:
+			print('**********************************')
+			print('*No internet, sorry. Arrivederci!*')
+			print('**********************************')
+
+			time.sleep(2)
 
 	country = ip_info['country']
 	city = ip_info['city']
@@ -298,6 +303,7 @@ def get_location_data():
 # get prayer times for a complete month
 def get_prayer_times(fajr_correction = 1):
 	times = []
+	connected = False
 
 	# to get the current date and time
 	now = datetime.datetime.now()
@@ -311,15 +317,18 @@ def get_prayer_times(fajr_correction = 1):
 	payload = {'country': country, 'city': city, 'month': now.month,
 			   'year': str(now.year), 'method': 3, 'midnightMode': 0 }
 
-	try:
-		response = ((requests.get(url, params=payload)).json())['data']
+	while not connected:
+		try:
+			response = ((requests.get(url, params=payload)).json())['data']
+			connected = True
 
-	except:
-		print('**********************************')
-		print('*No internet, sorry. Arrivederci!*')
-		print('**********************************')
-	
-		exit()
+		except:
+			print('**********************************')
+			print('*No internet, sorry. Arrivederci!*')
+			print('**********************************')
+
+			time.sleep(2)
+		
 
 	for i in range(5):
 		times.append(str(response[now.day - fajr_correction]['timings'][prayers[i]][:5]))
@@ -331,7 +340,7 @@ def get_prayer_times(fajr_correction = 1):
 
 	dic = {'times': times, 'actual_date': actual_date}
 
-	with open('prayers.json', 'w') as prayers_file:
+	with open(path + 'prayers.json', 'w') as prayers_file:
 		json.dump(dic, prayers_file)
 	
 
@@ -358,10 +367,12 @@ def on_press(key):
 		if any(all(k in current for k in COMBO) for COMBO in COMBINATIONS):
 			what_is_next()
 
+
 # what to do when the buttons combination is released .. ahem
 def on_release(key):
 	if any([key in COMBO for COMBO in COMBINATIONS]):
 		current.remove(key)	
+
 
 # initialize the keyboard monitoring thread
 def listener_fn():
@@ -369,11 +380,31 @@ def listener_fn():
 		listener.join()
 
 
+# computer sleep and resume
+def detect_sleep():
+	now_in_sec, temp = 0, 0
+
+	tolerance = 7 * 60
+
+	while 1:
+		now = time.localtime()
+
+		now_in_sec = (now[3]*60 + now[4])*60 + now[5]
+		
+		if (temp != 0) and ((now_in_sec - temp) > (tolerance + 5)):
+			prayer_reminder()
+
+		time.sleep(tolerance)
+		temp = now_in_sec
+
+
 ##### MAIN #####
 def main():
 	# to make it responsive to CTRL + C signal
 	# put IGN instead of DFL to ignore the CTRL + C
 	signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+	_thread.start_new_thread(detect_sleep, ())
 
 	# start the thread to listen for keyboard presses
 	_thread.start_new_thread(listener_fn, ())
@@ -389,7 +420,8 @@ def main():
 	# this blocks the main thread
 	gtk_main()
 
+
 if __name__ == '__main__':
 	# wait 5 seconds after startup before starting
-	time.sleep(5)
+	time.sleep(1)
 	main()
