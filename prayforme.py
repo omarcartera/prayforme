@@ -222,7 +222,9 @@ def prayer_reminder(corrected = False):
 				# renotify every 20 seconds for 5 times
 				time.sleep(20)
 
-			mute()
+			if muted:
+				mute()
+				
 			polling_time = 0
 			
 		# anything less than 2 hours remaining
