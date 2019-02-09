@@ -31,6 +31,8 @@ from gi.repository import AppIndicator3 as appindicator
 
 from gi.repository import Notify as notify
 
+from tendo import singleton
+
 
 ##### CONSTANTS #####
 # combinations of hotkeys to be detected
@@ -423,5 +425,11 @@ def main():
 
 if __name__ == '__main__':
 	# wait 5 seconds after startup before starting
-	time.sleep(1)
+	try:
+		me = singleton.SingleInstance()
+
+	except:
+		exit()
+
+	time.sleep(5)
 	main()
