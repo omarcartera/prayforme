@@ -1,20 +1,17 @@
 #!/usr/bin/env python3
 
-# for APIs GET
+# for APIs GET request
 import requests
 import json
 
 # to get the current date and time
 import datetime
 
-# for calling the popup notifications
+# for invoking the popup notifications
 import subprocess
 
-# for the time delay
+# for the delay
 import time
-
-# for path fetching
-import os
 
 # threading
 import _thread
@@ -22,34 +19,39 @@ import _thread
 # to handle the incoming signals to this process
 import signal
 
-# for hotkey detection
+# for keyboard keystrokes detection
 from pynput import keyboard
 
-# for the app indicator n ubuntu main bar
+# for the app indicator in ubuntu menu bar
 from gi.repository import Gtk as gtk
 from gi.repository import AppIndicator3 as appindicator
 
 from gi.repository import Notify as notify
 
+# to allow only one instance of the program
 from tendo import singleton
 
 
 ##### CONSTANTS #####
 # combinations of hotkeys to be detected
-COMBINATIONS = [{keyboard.Key.shift, keyboard.Key.ctrl, keyboard.Key.space}]
+# you invoke a popup notification by pressing CTRL + SHIFT + Space
+COMBINATIONS = [{keyboard.Key.ctrl, keyboard.Key.shift, keyboard.Key.space}]
 
 # to initialize hot key thing
 current = set()
 
 prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
 
-# basic path for images
+# paths must be absolute to work at startup
+# path for notification and app thumbnails
 path = 	'/home/omarcartera/Desktop/prayforme/'
 
 image_path = path + 'egg.svg'
 
+# path for the notification sound
 notification_path = '/home/omarcartera/Desktop/prayforme/notification.wav'
 
+# notification messages formats
 next_prayer_msg = 'Next Prayer is {0} {1}'
 adhan_msg       = 'Time to Adhan: {0}'
 prayer_time_msg = 'It is time for {0} {1}'
@@ -96,22 +98,20 @@ def build_menu():
 	item_next.connect('activate', what_is_next)
 	menu.append(item_next)
 
-	# mute/unmute the notifications
+	# mute/unmute the notifications until next prayer
 	item_mute = gtk.MenuItem('Mute')
 	item_mute.connect('activate', mute)
 	menu.append(item_mute)
 
 	menu.show_all()
 
-	return menu
 
-
-# alternative way to terminate the process
+# alternative way to CTRL + C to terminate the process
 def quit(source):
 	gtk.main_quit()
 
 
-# turn off the reminder notification sound
+# mute/unmute the notifications until next prayer
 def mute(source = None):
 	global item_mute, muted
 
@@ -123,6 +123,7 @@ def mute(source = None):
 		image_path = path + 'mute.png'
 		label = 'Unmute'
 
+	# updating the app/notification thumbnail and menu tab label
 	indicator.set_icon(image_path)
 	item_mute.set_label(label)
 
@@ -132,6 +133,7 @@ def mute(source = None):
 # pops a notification to tell the remaining time
 def what_is_next(source = 0):
 	# get the prayers timing sheet
+	# also here you need the absolute path
 	with open(path + 'prayers.json', 'r') as prayers_file:
 		data = json.load(prayers_file)
 
@@ -141,13 +143,16 @@ def what_is_next(source = 0):
 	# to get the current time
 	now_in_minutes = get_now_in_minutes()
 
+	# add the current time to the prayers timing list
 	times.append(now_in_minutes)
 
 	# sorting will puth the current_time entry just before the next prayer
 	times.sort()
 		
+	# get the remaining time to the next prayer
 	delta = get_delta_time(now_in_minutes, times)
 	
+	# name of next prayer
 	next_prayer = get_next_prayer(times, now_in_minutes)
 	
 	if muted:
@@ -156,16 +161,18 @@ def what_is_next(source = 0):
 	else:
 		image_path = path + 'egg.svg'
 
+	# invoke notification
+	## should be through a function
 	subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta))])
 	print(next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta)))
 
 
-# pop notifications of time remaining to prayer
+# pop notifications of time remaining to the next prayer
 def prayer_reminder(corrected = False):
 	global muted
 
 	while True:
-		# get the prayers timing sheet
+		# get the prayers timing sheet and actual date of the prayer
 		with open(path + 'prayers.json', 'r') as prayers_file:
 			data = json.load(prayers_file)
 
@@ -184,15 +191,20 @@ def prayer_reminder(corrected = False):
 		# get the time difference between now and next prayer
 		delta = get_delta_time(now_in_minutes, times)
 		
+		# name of next prayer
 		next_prayer = get_next_prayer(times, now_in_minutes)
 
 		# an initail solution to Isha-Midnight-Fajr problem
 		if next_prayer == 'Fajr' and not corrected:
+			# get the timing sheet for tomorrow, coz we are now
+			# before midnight and the next Fajr is tomorrow
 			get_prayer_times(0)
+
+			# to get the current time
 			now_in_minutes = get_now_in_minutes()
 			corrected = True
 
-			# get the prayers timing sheet
+			# get the new prayers timing sheet
 			with open(path + 'prayers.json', 'r') as prayers_file:
 				data = json.load(prayers_file)
 
@@ -207,6 +219,7 @@ def prayer_reminder(corrected = False):
 
 		else:
 			# play notification sound in a temporary thread
+			# because aplay command is blocking
 			# to be synced with the popup notification
 			_thread.start_new_thread(play, ())
 			image_path = path + 'egg.svg'
@@ -222,6 +235,7 @@ def prayer_reminder(corrected = False):
 				# renotify every 20 seconds for 5 times
 				time.sleep(20)
 
+			# recover from mute coz the muted prayer has passed
 			if muted:
 				mute()
 				
@@ -234,10 +248,6 @@ def prayer_reminder(corrected = False):
 			# repeat after (remaining time)/3 elapses
 			polling_time = (delta/3) * 60
 
-			print(next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta)))
-			print('Now is: ', time.localtime()[3], time.localtime()[4])
-			print('Next alarm is at: ' + min_to_time(time.localtime()[3] * 60 + time.localtime()[4] + polling_time/60))
-
 		# anything more than 2 hours remaining
 		else:
 			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta))])
@@ -245,10 +255,7 @@ def prayer_reminder(corrected = False):
 			# sleep until it's 2 hours remaining
 			polling_time = (delta - 120) * 60
 
-			print('Now is: ', time.localtime()[3], time.localtime()[4])
-			print('Next alarm is at: ' + min_to_time(time.localtime()[3] * 60 + time.localtime()[4] + polling_time/60))
-
-		# process: running --> sleep
+		# process state: running --> sleep
 		time.sleep(polling_time)
 
 
@@ -278,6 +285,8 @@ def get_delta_time(now_in_minutes, times):
 	return delta
 
 
+# returns the name of the next prayer based on current
+# time index in the timing list
 def get_next_prayer(times, now_in_minutes):
 	return prayers[times.index(now_in_minutes) % 5]
 
@@ -292,9 +301,9 @@ def get_location_data():
 			connected = True
 
 		except:
-			print('**********************************')
-			print('*No internet, sorry. Arrivederci!*')
-			print('**********************************')
+			print('*****************')
+			print('*Reconnecting...*')
+			print('*****************')
 
 			time.sleep(2)
 
@@ -327,23 +336,25 @@ def get_prayer_times(fajr_correction = 1):
 			connected = True
 
 		except:
-			print('**********************************')
-			print('*No internet, sorry. Arrivederci!*')
-			print('**********************************')
+			print('*****************')
+			print('*Reconnecting...*')
+			print('*****************')
 
 			time.sleep(2)
 		
 
 	for i in range(5):
+		# index of today = today - 1 .. that's how fajr correction works
 		times.append(str(response[now.day - fajr_correction]['timings'][prayers[i]][:5]))
 		times[i] = time_to_min(str(times[i]))
 
 
-	# actual date of these timings, for debugging
+	# actual date of these timings, for research reasons
 	actual_date = response[now.day - fajr_correction]['date']['readable']
 
 	dic = {'times': times, 'actual_date': actual_date}
 
+	# write down the timing sheet and actual date into a json
 	with open(path + 'prayers.json', 'w') as prayers_file:
 		json.dump(dic, prayers_file)
 	
@@ -384,7 +395,7 @@ def listener_fn():
 		listener.join()
 
 
-# computer sleep and resume
+# poor man sleep and resume detector
 def detect_sleep():
 	now_in_sec, temp = 0, 0
 
@@ -426,12 +437,13 @@ def main():
 
 
 if __name__ == '__main__':
-	# wait 5 seconds after startup before starting
+	# to limit the program to only one active instance
 	try:
 		me = singleton.SingleInstance()
 
 	except:
 		exit()
 
-	time.sleep(5)
+	# wait 10 seconds after startup before starting
+	time.sleep(10)
 	main()
