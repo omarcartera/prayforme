@@ -105,6 +105,8 @@ def build_menu():
 
 	menu.show_all()
 
+	return menu
+
 
 # alternative way to CTRL + C to terminate the process
 def quit(source):
@@ -164,7 +166,6 @@ def what_is_next(source = 0):
 	# invoke notification
 	## should be through a function
 	subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta))])
-	print(next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta)))
 
 
 # pop notifications of time remaining to the next prayer
@@ -227,13 +228,13 @@ def prayer_reminder(corrected = False):
 
 		# we can pray now
 		if delta == 0:
-			for r in range(5):
+			for r in range(4):
 				subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', prayer_time_msg.format(next_prayer, actual_date)])
 
 				print(prayer_time_msg.format(next_prayer, actual_date))
 
 				# renotify every 20 seconds for 5 times
-				time.sleep(20)
+				time.sleep(25)
 
 			# recover from mute coz the muted prayer has passed
 			if muted:
@@ -246,7 +247,7 @@ def prayer_reminder(corrected = False):
 			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta))])
 			
 			# repeat after (remaining time)/3 elapses
-			polling_time = (delta/3) * 60
+			polling_time = (delta/3.0) * 60
 
 		# anything more than 2 hours remaining
 		else:
@@ -254,6 +255,10 @@ def prayer_reminder(corrected = False):
 			
 			# sleep until it's 2 hours remaining
 			polling_time = (delta - 120) * 60
+
+		# needs to be placed in a more logical place
+		if muted:
+			polling_time = delta * 60
 
 		# process state: running --> sleep
 		time.sleep(polling_time)
