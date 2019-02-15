@@ -33,12 +33,7 @@ from tendo import singleton
 
 
 ##### CONSTANTS #####
-# combinations of hotkeys to be detected
-# you invoke a popup notification by pressing CTRL + SHIFT + Space
-COMBINATIONS = [{keyboard.Key.ctrl, keyboard.Key.shift, keyboard.Key.space}]
-
-# to initialize hot key thing
-current = set()
+ls = []
 
 prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
 
@@ -180,7 +175,6 @@ def prayer_reminder(my_thread_toggle):
 
 	while True:
 		if threads_toggle != my_thread_toggle:
-			print('old thread is off')
 			break
 
 		# get the prayers timing sheet and actual date of the prayer
@@ -189,8 +183,6 @@ def prayer_reminder(my_thread_toggle):
 
 		times = data['times']
 		actual_date = data['actual_date']
-
-		print(actual_date)
 		today = data['today']
 
 		# to get the current time
@@ -256,8 +248,6 @@ def prayer_reminder(my_thread_toggle):
 			if delta == 0:
 				for r in range(4):
 					subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', prayer_time_msg.format(next_prayer, today, actual_date)])
-
-					print(prayer_time_msg.format(next_prayer, actual_date))
 
 					# renotify every 20 seconds for 5 times
 					time.sleep(25)
@@ -402,17 +392,20 @@ def min_to_time(min):
 
 # what to do when the buttons combination is pressed
 def on_press(key):
-	if any([key in COMBO for COMBO in COMBINATIONS]):
-		current.add(key)
+	if str(key) in {'Key.ctrl', 'Key.space', 'Key.shift', 'Key.cmd'}:
+		ls.append(str(key))
 
-		if any(all(k in current for k in COMBO) for COMBO in COMBINATIONS):
-			what_is_next()
+	if sorted(ls) == sorted(['Key.ctrl', 'Key.shift', 'Key.space']):
+		what_is_next()
+
+	if sorted(ls) == sorted(['Key.ctrl', 'Key.shift', 'Key.cmd']):
+		mute()
 
 
 # what to do when the buttons combination is released .. ahem
 def on_release(key):
-	if any([key in COMBO for COMBO in COMBINATIONS]):
-		current.remove(key)	
+	if str(key) in {'Key.ctrl', 'Key.space', 'Key.shift', 'Key.cmd'}:
+		ls.remove(str(key))	
 
 
 # initialize the keyboard monitoring thread
@@ -439,7 +432,6 @@ def detect_sleep():
 		if (temp != 0) and ((now_in_sec - temp) > (tolerance + 5)):
 			threads_toggle = not(threads_toggle)
 
-			print('new thread is on')
 			_thread.start_new_thread(prayer_reminder, (threads_toggle,))
 
 		time.sleep(tolerance)
