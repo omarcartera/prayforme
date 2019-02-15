@@ -52,9 +52,9 @@ image_path = path + 'egg.svg'
 notification_path = '/home/omarcartera/Desktop/prayforme/notification.wav'
 
 # notification messages formats
-next_prayer_msg = 'Next Prayer is {0} {1}'
+next_prayer_msg = 'Next: {0} {1} {2}'
 adhan_msg       = 'Time to Adhan: {0}'
-prayer_time_msg = 'It is time for {0} {1}'
+prayer_time_msg = 'Time for {0} {1} {2}'
 #####################
 
 
@@ -64,6 +64,9 @@ indicator = ''
 item_mute = ''
 
 muted = False
+
+# to make only one thread alive
+threads_toggle = True
 ###################
 
 # app indicator settings
@@ -110,7 +113,7 @@ def build_menu():
 
 # alternative way to CTRL + C to terminate the process
 def quit(source):
-	gtk.main_quit()
+	exit()
 
 
 # mute/unmute the notifications until next prayer
@@ -141,6 +144,7 @@ def what_is_next(source = 0):
 
 	times = data['times']
 	actual_date = data['actual_date']
+	today = data['today']
 
 	# to get the current time
 	now_in_minutes = get_now_in_minutes()
@@ -165,20 +169,29 @@ def what_is_next(source = 0):
 
 	# invoke notification
 	## should be through a function
-	subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta))])
+	subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, today, actual_date), adhan_msg.format(min_to_time(delta))])
 
 
 # pop notifications of time remaining to the next prayer
-def prayer_reminder(corrected = False):
+def prayer_reminder(my_thread_toggle):
 	global muted
+	
+	corrected = False
 
 	while True:
+		if threads_toggle != my_thread_toggle:
+			print('old thread is off')
+			break
+
 		# get the prayers timing sheet and actual date of the prayer
 		with open(path + 'prayers.json', 'r') as prayers_file:
 			data = json.load(prayers_file)
 
 		times = data['times']
 		actual_date = data['actual_date']
+
+		print(actual_date)
+		today = data['today']
 
 		# to get the current time
 		now_in_minutes = get_now_in_minutes()
@@ -211,58 +224,62 @@ def prayer_reminder(corrected = False):
 
 				times = data['times']
 				actual_date = data['actual_date']
-			
+		
+
 		elif next_prayer != 'Fajr' and corrected:
 			corrected = False
 
+			
+		elif next_prayer == 'Dhuhr' and today == 'Fri':
+			next_prayer = 'Jomaa'
+
+
+		# needs to be placed in a more logical place
 		if muted:
+			polling_time = delta * 60
 			image_path = path + 'mute.png'
 
-		else:
+			# process state: running --> sleep
+			time.sleep(polling_time)
+			
+			# recover from mute coz the muted prayer has passed
+			mute()
+
+		else:	
 			# play notification sound in a temporary thread
 			# because aplay command is blocking
 			# to be synced with the popup notification
 			_thread.start_new_thread(play, ())
 			image_path = path + 'egg.svg'
 
+			# we can pray now
+			if delta == 0:
+				for r in range(4):
+					subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', prayer_time_msg.format(next_prayer, today, actual_date)])
 
-		# we can pray now
-		if delta == 0:
-			for r in range(4):
-				subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', prayer_time_msg.format(next_prayer, actual_date)])
+					print(prayer_time_msg.format(next_prayer, actual_date))
 
-				print(prayer_time_msg.format(next_prayer, actual_date))
-
-				# renotify every 20 seconds for 5 times
-				time.sleep(25)
-
-			# recover from mute coz the muted prayer has passed
-			if muted:
-				mute()
+					# renotify every 20 seconds for 5 times
+					time.sleep(25)
+					
+				polling_time = 0
 				
-			polling_time = 0
-			
-		# anything less than 2 hours remaining
-		elif delta <= 120:
-			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta))])
-			
-			# repeat after (remaining time)/3 elapses
-			polling_time = (delta/3.0) * 60
+			# anything less than 2 hours remaining
+			elif delta <= 120:
+				subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, today, actual_date), adhan_msg.format(min_to_time(delta))])
+				
+				# repeat after (remaining time)/3 elapses
+				polling_time = (delta/3.0) * 60
 
-		# anything more than 2 hours remaining
-		else:
-			subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, actual_date), adhan_msg.format(min_to_time(delta))])
-			
-			# sleep until it's 2 hours remaining
-			polling_time = (delta - 120) * 60
+			# anything more than 2 hours remaining
+			else:
+				subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, today, actual_date), adhan_msg.format(min_to_time(delta))])
+				
+				# sleep until it's 2 hours remaining
+				polling_time = (delta - 120) * 60
 
-		# needs to be placed in a more logical place
-		if muted:
-			polling_time = delta * 60
-
-		# process state: running --> sleep
-		time.sleep(polling_time)
-
+			# process state: running --> sleep
+			time.sleep(polling_time)
 
 # get current time
 def get_now_in_minutes():
@@ -354,10 +371,14 @@ def get_prayer_times(fajr_correction = 1):
 		times[i] = time_to_min(str(times[i]))
 
 
+
 	# actual date of these timings, for research reasons
 	actual_date = response[now.day - fajr_correction]['date']['readable']
 
-	dic = {'times': times, 'actual_date': actual_date}
+	# needs fajr correction as well
+	today = (now + datetime.timedelta(days=not(fajr_correction))).strftime("%A")[:3]
+
+	dic = {'times': times, 'actual_date': actual_date, 'today': today}
 
 	# write down the timing sheet and actual date into a json
 	with open(path + 'prayers.json', 'w') as prayers_file:
@@ -401,7 +422,11 @@ def listener_fn():
 
 
 # poor man sleep and resume detector
+# this makes a double-thread or more working on the same
+# task --> double notifications with a delay
 def detect_sleep():
+	global threads_toggle
+
 	now_in_sec, temp = 0, 0
 
 	tolerance = 7 * 60
@@ -412,7 +437,10 @@ def detect_sleep():
 		now_in_sec = (now[3]*60 + now[4])*60 + now[5]
 		
 		if (temp != 0) and ((now_in_sec - temp) > (tolerance + 5)):
-			prayer_reminder()
+			threads_toggle = not(threads_toggle)
+
+			print('new thread is on')
+			_thread.start_new_thread(prayer_reminder, (threads_toggle,))
 
 		time.sleep(tolerance)
 		temp = now_in_sec
@@ -435,7 +463,7 @@ def main():
 	get_prayer_times()
 
 	# a thread to monitor the remaining time for the next prayer
-	_thread.start_new_thread(prayer_reminder, ())
+	_thread.start_new_thread(prayer_reminder, (threads_toggle,))
 
 	# this blocks the main thread
 	gtk_main()
@@ -450,5 +478,5 @@ if __name__ == '__main__':
 		exit()
 
 	# wait 10 seconds after startup before starting
-	time.sleep(10)
+	time.sleep(0)
 	main()
