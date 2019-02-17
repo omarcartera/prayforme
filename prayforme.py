@@ -32,6 +32,11 @@ from gi.repository import Notify as notify
 from tendo import singleton
 
 
+# resume detection
+import dbus      # for dbus communication (obviously)
+from gi.repository import GObject as gobject
+from dbus.mainloop.glib import DBusGMainLoop # integration into the main loop
+
 ##### CONSTANTS #####
 ls = []
 
@@ -414,28 +419,13 @@ def listener_fn():
 		listener.join()
 
 
-# poor man sleep and resume detector
-# this makes a double-thread or more working on the same
-# task --> double notifications with a delay
-def detect_sleep():
+def handle_sleep_callback(sleeping):
 	global threads_toggle
 
-	now_in_sec, temp = 0, 0
-
-	tolerance = 7 * 60
-
-	while 1:
-		now = time.localtime()
-
-		now_in_sec = (now[3]*60 + now[4])*60 + now[5]
-		
-		if (temp != 0) and ((now_in_sec - temp) > (tolerance + 5)):
-			threads_toggle = not(threads_toggle)
-
-			_thread.start_new_thread(prayer_reminder, (threads_toggle,))
-
-		time.sleep(tolerance)
-		temp = now_in_sec
+	if not sleeping:
+		time.sleep(60)
+		threads_toggle = not(threads_toggle)
+		_thread.start_new_thread(prayer_reminder, (threads_toggle,))
 
 
 ##### MAIN #####
@@ -456,6 +446,18 @@ def main():
 
 	# a thread to monitor the remaining time for the next prayer
 	_thread.start_new_thread(prayer_reminder, (threads_toggle,))
+
+	DBusGMainLoop(set_as_default=True) # integrate into main loob
+	bus = dbus.SystemBus()             # connect to dbus system wide
+	bus.add_signal_receiver(           # defince the signal to listen to
+		handle_sleep_callback,            # name of callback function
+		'PrepareForSleep',                 # signal name
+		'org.freedesktop.login1.Manager',   # interface
+		'org.freedesktop.login1'            # bus name
+	)
+
+	loop = gobject.MainLoop()          # define mainloop
+	_thread.start_new_thread(loop.run, ())                         # run main loop
 
 	# this blocks the main thread
 	gtk_main()
