@@ -434,8 +434,6 @@ def main():
 	# put IGN instead of DFL to ignore the CTRL + C
 	signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-	_thread.start_new_thread(detect_sleep, ())
-
 	# start the thread to listen for keyboard presses
 	_thread.start_new_thread(listener_fn, ())
 
