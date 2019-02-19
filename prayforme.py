@@ -66,7 +66,7 @@ item_mute = ''
 muted = False
 
 # to make only one thread alive
-threads_toggle = True
+threads_toggle = 0
 ###################
 
 # app indicator settings
@@ -180,6 +180,7 @@ def prayer_reminder(my_thread_toggle):
 
 	while True:
 		if threads_toggle != my_thread_toggle:
+			print('thread', my_thread_toggle, 'is off')
 			break
 
 		# get the prayers timing sheet and actual date of the prayer
@@ -424,7 +425,8 @@ def handle_sleep_callback(sleeping):
 
 	if not sleeping:
 		time.sleep(60)
-		threads_toggle = not(threads_toggle)
+		threads_toggle += 1
+		print('thread', threads_toggle, 'is on')
 		_thread.start_new_thread(prayer_reminder, (threads_toggle,))
 
 
@@ -470,5 +472,5 @@ if __name__ == '__main__':
 		exit()
 
 	# wait 10 seconds after startup before starting
-	time.sleep(0)
+	time.sleep(60)
 	main()
