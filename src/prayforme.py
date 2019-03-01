@@ -55,7 +55,7 @@ path = 	'/home/omarcartera/Desktop/prayforme/src/'
 image_path = path + 'egg.svg'
 
 # path for the notification sound
-notification_path = path + '/notification.wav'
+notification_path = path + 'notification.wav'
 
 # notification messages formats
 next_prayer_msg = 'Next: {0} {1} {2}'
@@ -108,7 +108,8 @@ def build_menu():
 	menu.append(item_next)
 
 	# mute/unmute the notifications until next prayer
-	item_mute = gtk.MenuItem('Mute')
+	item_mute = gtk.CheckMenuItem('Mute')
+	item_mute.set_draw_as_radio(True)
 	item_mute.connect('activate', mute)
 	menu.append(item_mute)
 
@@ -137,7 +138,6 @@ def mute(source = None):
 	# updating the app/notification thumbnail and menu tab label
 	indicator.set_icon(image_path)
 	item_mute.set_label(label)
-
 	muted = not muted
 
 
@@ -435,8 +435,9 @@ def handle_sleep_callback(sleeping):
 		_thread.start_new_thread(prayer_reminder, (threads_toggle,))
 
 
-def onButtonPressed(button):
+def onButtonPressed(sth1, sth2):
 	print('begun')
+	print(sth1, sth2)
 	country = lndt_country.get_text()
 	city = lndt_city.get_text()
 
@@ -450,6 +451,12 @@ def onButtonPressed(button):
 def onDestroy(sth):
 	print('BYYYYYE')
 	exit()
+
+# detecting keypress
+def test(sth1, sth2):
+	# 65293 is the key value of enter
+	if sth2.keyval == 65293:
+		onButtonPressed(None, None)
 
 
 def call_gui():
@@ -478,6 +485,13 @@ def call_gui():
 
 	lndt_country.set_text(country)
 	lndt_city.set_text(city)
+
+	# connect the enter keystroke to trigger button press
+	# lndt_country.connect("key-press-event", onButtonPressed)
+	# lndt_city.connect("key-press-event", onButtonPressed)
+
+	lndt_country.connect("key-press-event", test)
+	lndt_city.connect("key-press-event", test)
 
 	window.show_all()
 	gtk.main()
@@ -521,6 +535,9 @@ def main():
 
 
 if __name__ == '__main__':
+	# wait 60 seconds after startup before starting
+	time.sleep(0)
+
 	# to limit the program to only one active instance
 	try:
 		me = singleton.SingleInstance()
@@ -528,6 +545,4 @@ if __name__ == '__main__':
 	except:
 		exit()
 
-	# wait 60 seconds after startup before starting
-	time.sleep(0)
 	main()
