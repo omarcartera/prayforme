@@ -37,34 +37,39 @@ from gi.repository import Notify as notify
 # to allow only one instance of the program
 from tendo import singleton
 
-
-# resume detection
+# sleep/resume detection
 import dbus      # for dbus communication (obviously)
 from gi.repository import GObject as gobject
 from dbus.mainloop.glib import DBusGMainLoop # integration into the main loop
 
 ##### CONSTANTS #####
-ls = []
+KEY_ENTER = 65293
+# KEY_SHIFT = 65505
+# KEY_CTRL  = 65507
+# KEY_CMD   = 65515
+# KEY_SPACE = ' '
 
 prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
 
 # paths must be absolute to work at startup
 # path for notification and app thumbnails
-path = 	'/home/omarcartera/Desktop/prayforme/src/'
+path              = '/home/omarcartera/Desktop/prayforme/src/'
 
-image_path = path + 'egg.svg'
+image_path        = path + 'egg.svg'
 
 # path for the notification sound
 notification_path = path + 'notification.wav'
 
 # notification messages formats
-next_prayer_msg = 'Next: {0} {1} {2}'
+next_prayer_msg = '{0}, {1} {2}'
 adhan_msg       = 'Time to Adhan: {0}'
 prayer_time_msg = 'Time for {0} {1} {2}'
 #####################
 
 
 ##### GLOBALS #####
+ls = []
+
 # image for app indicator icon and notification
 indicator = ''
 item_mute = ''
@@ -72,7 +77,7 @@ item_mute = ''
 muted = False
 
 # to make only one thread alive
-threads_toggle = 0
+thread_id = 0
 ###################
 
 # app indicator settings
@@ -138,6 +143,7 @@ def mute(source = None):
 	# updating the app/notification thumbnail and menu tab label
 	indicator.set_icon(image_path)
 	item_mute.set_label(label)
+
 	muted = not muted
 
 
@@ -148,9 +154,9 @@ def what_is_next(source = 0):
 	with open(path + 'prayers.json', 'r') as prayers_file:
 		data = json.load(prayers_file)
 
-	times = data['times']
+	times       = data['times']
 	actual_date = data['actual_date']
-	today = data['today']
+	today       = data['today']
 
 	# to get the current time
 	now_in_minutes = get_now_in_minutes()
@@ -179,23 +185,23 @@ def what_is_next(source = 0):
 
 
 # pop notifications of time remaining to the next prayer
-def prayer_reminder(my_thread_toggle):
+def prayer_reminder(my_thread_id):
 	global muted
 	
 	corrected = False
 
 	while True:
-		if threads_toggle != my_thread_toggle:
-			print('thread', my_thread_toggle, 'is off')
+		if thread_id != my_thread_id:
+			print('thread', my_thread_id, 'is off')
 			break
 
 		# get the prayers timing sheet and actual date of the prayer
 		with open(path + 'prayers.json', 'r') as prayers_file:
 			data = json.load(prayers_file)
 
-		times = data['times']
+		times       = data['times']
 		actual_date = data['actual_date']
-		today = data['today']
+		today       = data['today']
 
 		# to get the current time
 		now_in_minutes = get_now_in_minutes()
@@ -217,8 +223,8 @@ def prayer_reminder(my_thread_toggle):
 			# get the timing sheet for tomorrow, coz we are now
 			# before midnight and the next Fajr is tomorrow
 			
-			### not general ###
-			get_prayer_times(0, 'IT', 'Bologna')
+			country, city = get_location_data()
+			get_prayer_times(0, country, city)
 
 			# to get the current time
 			now_in_minutes = get_now_in_minutes()
@@ -242,7 +248,7 @@ def prayer_reminder(my_thread_toggle):
 
 		# needs to be placed in a more logical place
 		if muted:
-			polling_time = delta * 60
+			polling_time = int((delta + 1.1) * 60)
 			image_path = path + 'mute.png'
 
 			# process state: running --> sleep
@@ -263,9 +269,10 @@ def prayer_reminder(my_thread_toggle):
 				for r in range(4):
 					subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', prayer_time_msg.format(next_prayer, today, actual_date)])
 
-					# renotify every 20 seconds for 5 times
+					# renotify every 25 seconds for 4 times
 					time.sleep(25)
 					
+				# to continue directly without waiting again
 				polling_time = 0
 				
 			# anything less than 2 hours remaining
@@ -284,6 +291,7 @@ def prayer_reminder(my_thread_toggle):
 
 			# process state: running --> sleep
 			time.sleep(polling_time)
+
 
 # get current time
 def get_now_in_minutes():
@@ -371,12 +379,9 @@ def get_prayer_times(fajr_correction, country, city):
 		times.append(str(response[now.day - fajr_correction]['timings'][prayers[i]][:5]))
 		times[i] = time_to_min(str(times[i]))
 
-
-
 	# actual date of these timings, for research reasons
 	actual_date = response[now.day - fajr_correction]['date']['readable']
 
-	# needs fajr correction as well
 	today = (now + datetime.timedelta(days=not(fajr_correction))).strftime("%A")[:3]
 
 	dic = {'times': times, 'actual_date': actual_date, 'today': today}
@@ -425,24 +430,23 @@ def listener_fn():
 		listener.join()
 
 
-def handle_sleep_callback(sleeping):
-	global threads_toggle
+# sleep and resume detection
+def resume_detection(sleeping):
+	global thread_id
 
 	if not sleeping:
-		time.sleep(5)
-		threads_toggle += 1
-		print('thread', threads_toggle, 'is on')
-		_thread.start_new_thread(prayer_reminder, (threads_toggle,))
+		time.sleep(10)
+		thread_id += 1
+		print('thread', thread_id, 'is on')
+		_thread.start_new_thread(prayer_reminder, (thread_id,))
 
 
-def onButtonPressed(sth1, sth2):
-	print('begun')
-	print(sth1, sth2)
+def onButtonPressed(sth1=None, sth2=None):
 	country = lndt_country.get_text()
 	city = lndt_city.get_text()
 
 	window.hide()
-	print('leaving')
+
 	# this blocks the main thread
 	_thread.start_new_thread(gtk_main, ())
 	cont(country, city)
@@ -453,12 +457,12 @@ def onDestroy(sth):
 	exit()
 
 # detecting keypress
-def test(sth1, sth2):
+def test(sth1, key):
 	# 65293 is the key value of enter
-	if sth2.keyval == 65293:
-		onButtonPressed(None, None)
+	if key.keyval == KEY_ENTER:
+		onButtonPressed()
 
-
+# a gui window to ensure country and city from user
 def call_gui():
 	global lndt_country, lndt_city, window
 
@@ -467,13 +471,12 @@ def call_gui():
 
 	handlers = {
 	    "onButtonPress": onButtonPressed,
-	    "onDestroy"		 : onDestroy
+	    "onDestroy"	   : onDestroy
 	}
 
 	builder.connect_signals(handlers)
 
 	xml = builder.get_objects()
-	print(xml)
 
 	window = builder.get_object("window1")
 	lndt_country = builder.get_object("lndt_country")
@@ -487,9 +490,6 @@ def call_gui():
 	lndt_city.set_text(city)
 
 	# connect the enter keystroke to trigger button press
-	# lndt_country.connect("key-press-event", onButtonPressed)
-	# lndt_city.connect("key-press-event", onButtonPressed)
-
 	lndt_country.connect("key-press-event", test)
 	lndt_city.connect("key-press-event", test)
 
@@ -502,20 +502,20 @@ def cont(country, city):
 	get_prayer_times(1, country, city)
 
 	# a thread to monitor the remaining time for the next prayer
-	_thread.start_new_thread(prayer_reminder, (threads_toggle,))
+	_thread.start_new_thread(prayer_reminder, (thread_id,))
 	
 	try:
-		DBusGMainLoop(set_as_default=True) # integrate into main loob
-		bus = dbus.SystemBus()             # connect to dbus system wide
-		bus.add_signal_receiver(           # defince the signal to listen to
-			handle_sleep_callback,            # name of callback function
-			'PrepareForSleep',                 # signal name
-			'org.freedesktop.login1.Manager',   # interface
-			'org.freedesktop.login1'            # bus name
+		DBusGMainLoop(set_as_default=True)		# integrate into main loob
+		bus = dbus.SystemBus()					# connect to dbus system wide
+		bus.add_signal_receiver(				# defince the signal to listen to
+			resume_detection,					# name of callback function
+			'PrepareForSleep',					# signal name
+			'org.freedesktop.login1.Manager',	# interface
+			'org.freedesktop.login1'			# bus name
 		)
 
-		loop = gobject.MainLoop()          # define mainloop
-		loop.run()                         # run main loop
+		loop = gobject.MainLoop()				# define mainloop
+		loop.run()								# run main loop
 	
 	except Exception as e:
 		print('***', e, '***')
@@ -526,7 +526,7 @@ def main():
 	global xml
 	# to make it responsive to CTRL + C signal
 	# put IGN instead of DFL to ignore the CTRL + C
-	signal.signal(signal.SIGINT, signal.SIG_DFL)
+	signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 	# start the thread to listen for keyboard presses
 	_thread.start_new_thread(listener_fn, ())
@@ -546,3 +546,10 @@ if __name__ == '__main__':
 		exit()
 
 	main()
+
+
+
+#### FAJR CORRECTION FOR END/BEGINNING OF MANTHS ####
+# import datetime
+
+# print(datetime.date.today() + datetime.timedelta(days=1))
