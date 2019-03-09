@@ -124,7 +124,7 @@ def build_menu():
 
 
 # alternative way to CTRL + C to terminate the process
-def quit(source):
+def quit(source = None, sth = None):
 	exit()
 
 
@@ -180,8 +180,11 @@ def what_is_next(source = 0):
 		image_path = path + 'egg.svg'
 
 	# invoke notification
-	## should be through a function
-	subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, today, actual_date), adhan_msg.format(min_to_time(delta))])
+	mode  = 'next_prayer'
+	title = next_prayer_msg.format(next_prayer, today, actual_date)
+	body  = adhan_msg.format(min_to_time(delta))
+
+	show_notification(mode = mode, title = title, body = body)
 
 
 # pop notifications of time remaining to the next prayer
@@ -249,7 +252,6 @@ def prayer_reminder(my_thread_id):
 		# needs to be placed in a more logical place
 		if muted:
 			polling_time = int((delta + 1.1) * 60)
-			image_path = path + 'mute.png'
 
 			# process state: running --> sleep
 			time.sleep(polling_time)
@@ -257,37 +259,43 @@ def prayer_reminder(my_thread_id):
 			# recover from mute coz the muted prayer has passed
 			mute()
 
-		else:	
-			# play notification sound in a temporary thread
-			# because aplay command is blocking
-			# to be synced with the popup notification
-			_thread.start_new_thread(play, ())
-			image_path = path + 'egg.svg'
 
+		else:
 			# we can pray now
 			if delta == 0:
-				for r in range(4):
-					subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', prayer_time_msg.format(next_prayer, today, actual_date)])
 
-					# renotify every 25 seconds for 4 times
-					time.sleep(25)
+				# invoke notification
+				mode  = 'prayer_time'
+				title = prayer_time_msg.format(next_prayer, today, actual_date)
 					
-				# to continue directly without waiting again
-				polling_time = 0
+				# wait 25 seconds between every notification
+				polling_time = 25
 				
+
 			# anything less than 2 hours remaining
 			elif delta <= 120:
-				subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, today, actual_date), adhan_msg.format(min_to_time(delta))])
-				
+
+				# invoke notification
+				mode  = 'next_prayer'
+				title = next_prayer_msg.format(next_prayer, today, actual_date)
+				body  = adhan_msg.format(min_to_time(delta))
+
 				# repeat after (remaining time)/3 elapses
 				polling_time = (delta/3.0) * 60
 
+
 			# anything more than 2 hours remaining
 			else:
-				subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', next_prayer_msg.format(next_prayer, today, actual_date), adhan_msg.format(min_to_time(delta))])
-				
+				# invoke notification
+				mode  = 'next_prayer'
+				title = next_prayer_msg.format(next_prayer, today, actual_date)
+				body  = adhan_msg.format(min_to_time(delta))
+
 				# sleep until it's 2 hours remaining
 				polling_time = (delta - 120) * 60
+
+			# invoke notification
+			show_notification(mode = mode, title = title, body = body, thread = my_thread_id)
 
 			# process state: running --> sleep
 			time.sleep(polling_time)
@@ -332,6 +340,10 @@ def get_location_data():
 	while not connected:
 		try:
 			ip_info = (requests.get('http://ipinfo.io/json')).json()
+
+			country = ip_info['country']
+			city = ip_info['city']
+
 			connected = True
 
 		except:
@@ -341,16 +353,12 @@ def get_location_data():
 
 			time.sleep(2)
 
-	country = ip_info['country']
-	city = ip_info['city']
-
 	return country, city
 
 
 # get prayer times for a complete month
 def get_prayer_times(fajr_correction, country, city):
 	times = []
-	connected = False
 
 	# to get the current date and time
 	now = datetime.datetime.now()
@@ -360,6 +368,8 @@ def get_prayer_times(fajr_correction, country, city):
 
 	payload = {'country': country, 'city': city, 'month': now.month,
 			   'year': str(now.year), 'method': 3, 'midnightMode': 0 }
+
+	connected = False
 
 	while not connected:
 		try:
@@ -395,6 +405,29 @@ def get_prayer_times(fajr_correction, country, city):
 def play():
 	subprocess.call(['aplay',  notification_path])
 
+
+# a unified function that shows the popup notification
+def show_notification(mode = None, title = None, body = None, thread = -1):
+	global muted
+
+	# play notification sound in a temporary thread
+	# because aplay command is blocking
+	# to be synced with the popup notification
+	if muted:
+		image_path = path + 'mute.png'
+
+	else:
+		image_path = path + 'egg.svg'
+		_thread.start_new_thread(play, ())
+
+
+	if mode == 'next_prayer':
+		subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', title + ' - ' + str(thread), body])
+
+	elif mode == 'prayer_time':
+		subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', title + ' - ' + str(thread)])
+
+	
 
 # convert hh:mm to integer minutes
 def time_to_min(time):
@@ -435,7 +468,7 @@ def resume_detection(sleeping):
 	global thread_id
 
 	if not sleeping:
-		time.sleep(10)
+		time.sleep(30)
 		thread_id += 1
 		print('thread', thread_id, 'is on')
 		_thread.start_new_thread(prayer_reminder, (thread_id,))
@@ -450,11 +483,6 @@ def onButtonPressed(sth1=None, sth2=None):
 	# this blocks the main thread
 	_thread.start_new_thread(gtk_main, ())
 	cont(country, city)
-
-
-def onDestroy(sth):
-	print('BYYYYYE')
-	exit()
 
 # detecting keypress
 def test(sth1, key):
@@ -471,7 +499,7 @@ def call_gui():
 
 	handlers = {
 	    "onButtonPress": onButtonPressed,
-	    "onDestroy"	   : onDestroy
+	    "onDestroy"	   : quit
 	}
 
 	builder.connect_signals(handlers)
@@ -526,7 +554,8 @@ def main():
 	global xml
 	# to make it responsive to CTRL + C signal
 	# put IGN instead of DFL to ignore the CTRL + C
-	signal.signal(signal.SIGINT, signal.SIG_IGN)
+	# put a function name instead of the IGN/DFL
+	signal.signal(signal.SIGINT, quit)
 
 	# start the thread to listen for keyboard presses
 	_thread.start_new_thread(listener_fn, ())
@@ -535,9 +564,6 @@ def main():
 
 
 if __name__ == '__main__':
-	# wait 60 seconds after startup before starting
-	time.sleep(0)
-
 	# to limit the program to only one active instance
 	try:
 		me = singleton.SingleInstance()
