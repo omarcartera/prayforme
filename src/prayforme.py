@@ -42,6 +42,10 @@ import dbus      # for dbus communication (obviously)
 from gi.repository import GObject as gobject
 from dbus.mainloop.glib import DBusGMainLoop # integration into the main loop
 
+# to check for ubuntu version
+import lsb_release
+
+
 ##### CONSTANTS #####
 KEY_ENTER = 65293
 # KEY_SHIFT = 65505
@@ -55,7 +59,15 @@ prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
 # path for notification and app thumbnails
 path              = '/home/omarcartera/Desktop/prayforme/src/'
 
-image_path        = path + 'egg.svg'
+if lsb_release.get_lsb_information()['DESCRIPTION'] == 'Ubuntu 18.10':
+	## for ubuntu 18.10 .. we need an automated check
+	icon_path        = path + 'eggw.svg'
+
+else:
+	## for ubuntu 16.04
+	icon_path        = path + 'egg.svg'
+
+
 
 # path for the notification sound
 notification_path = path + 'notification.wav'
@@ -86,7 +98,7 @@ def gtk_main():
 
 	APPINDICATOR_ID = 'myappindicator'
 
-	indicator = appindicator.Indicator.new(APPINDICATOR_ID, image_path, appindicator.IndicatorCategory.SYSTEM_SERVICES)
+	indicator = appindicator.Indicator.new(APPINDICATOR_ID, icon_path, appindicator.IndicatorCategory.SYSTEM_SERVICES)
 	indicator.set_status(appindicator.IndicatorStatus.ACTIVE)
 	indicator.set_menu(build_menu())
 
@@ -133,7 +145,8 @@ def mute(source = None):
 	global item_mute, muted
 
 	if muted:
-		image_path = path + 'egg.svg'
+		# to match the correct icon path for this ubuntu version
+		image_path = icon_path
 		label = 'Mute'
 
 	else:
