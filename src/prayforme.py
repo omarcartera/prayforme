@@ -45,6 +45,8 @@ from dbus.mainloop.glib import DBusGMainLoop # integration into the main loop
 # to check for ubuntu version
 import lsb_release
 
+# to get the absolute path
+import os
 
 ##### CONSTANTS #####
 KEY_ENTER = 65293
@@ -57,20 +59,22 @@ prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
 
 # paths must be absolute to work at startup
 # path for notification and app thumbnails
-path              = '/home/omarcartera/Desktop/prayforme/src/'
+abs_path = os.getcwd() +'/'
+
 
 if lsb_release.get_lsb_information()['DESCRIPTION'] == 'Ubuntu 18.10':
 	## for ubuntu 18.10 .. we need an automated check
-	icon_path        = path + 'eggw.svg'
+	icon_path = abs_path + 'eggw.svg'
 
 else:
 	## for ubuntu 16.04
-	icon_path        = path + 'egg.svg'
+	icon_path = abs_path + 'egg.svg'
 
-
+mute_icon = abs_path + 'mute.png'
+not_mute_icon = abs_path + 'egg.svg'
 
 # path for the notification sound
-notification_path = path + 'notification.wav'
+notification_path = abs_path + 'notification.wav'
 
 # notification messages formats
 next_prayer_msg = '{0}, {1} {2}'
@@ -150,7 +154,7 @@ def mute(source = None):
 		label = 'Mute'
 
 	else:
-		image_path = path + 'mute.png'
+		image_path = mute_icon
 		label = 'Unmute'
 
 	# updating the app/notification thumbnail and menu tab label
@@ -164,7 +168,7 @@ def mute(source = None):
 def what_is_next(source = 0):
 	# get the prayers timing sheet
 	# also here you need the absolute path
-	with open(path + 'prayers.json', 'r') as prayers_file:
+	with open(abs_path + 'prayers.json', 'r') as prayers_file:
 		data = json.load(prayers_file)
 
 	times       = data['times']
@@ -187,10 +191,10 @@ def what_is_next(source = 0):
 	next_prayer = get_next_prayer(times, now_in_minutes)
 	
 	if muted:
-		image_path = path + 'mute.png'
+		image_path = mute_icon
 
 	else:
-		image_path = path + 'egg.svg'
+		image_path = not_mute_icon
 
 	# invoke notification
 	mode  = 'next_prayer'
@@ -212,7 +216,7 @@ def prayer_reminder(my_thread_id):
 			break
 
 		# get the prayers timing sheet and actual date of the prayer
-		with open(path + 'prayers.json', 'r') as prayers_file:
+		with open(abs_path + 'prayers.json', 'r') as prayers_file:
 			data = json.load(prayers_file)
 
 		times       = data['times']
@@ -247,7 +251,7 @@ def prayer_reminder(my_thread_id):
 			corrected = True
 
 			# get the new prayers timing sheet
-			with open(path + 'prayers.json', 'r') as prayers_file:
+			with open(abs_path + 'prayers.json', 'r') as prayers_file:
 				data = json.load(prayers_file)
 
 				times = data['times']
@@ -410,7 +414,7 @@ def get_prayer_times(fajr_correction, country, city):
 	dic = {'times': times, 'actual_date': actual_date, 'today': today}
 
 	# write down the timing sheet and actual date into a json
-	with open(path + 'prayers.json', 'w') as prayers_file:
+	with open(abs_path + 'prayers.json', 'w') as prayers_file:
 		json.dump(dic, prayers_file)
 	
 
@@ -427,10 +431,11 @@ def show_notification(mode = None, title = None, body = None, thread = -1):
 	# because aplay command is blocking
 	# to be synced with the popup notification
 	if muted:
-		image_path = path + 'mute.png'
+		image_path = mute_icon
 
 	else:
-		image_path = path + 'egg.svg'
+		image_path = not_mute_icon
+
 		_thread.start_new_thread(play, ())
 
 
@@ -508,7 +513,7 @@ def call_gui():
 	global lndt_country, lndt_city, window
 
 	builder = gtk.Builder()
-	builder.add_from_file(path + "gui_design.glade")
+	builder.add_from_file(abs_path + "gui_design.glade")
 
 	handlers = {
 	    "onButtonPress": onButtonPressed,
@@ -585,10 +590,3 @@ if __name__ == '__main__':
 		exit()
 
 	main()
-
-
-
-#### FAJR CORRECTION FOR END/BEGINNING OF MANTHS ####
-# import datetime
-
-# print(datetime.date.today() + datetime.timedelta(days=1))
