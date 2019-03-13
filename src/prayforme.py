@@ -415,6 +415,7 @@ def get_prayer_times(fajr_correction, country, city):
 	json_interface('w', dic)
 	
 
+# a single function to write/read from the json
 def json_interface(ctrl = 'r', to_write = None):
 	with open(abs_path + 'prayers.json', ctrl) as prayers_file:
 		if ctrl == 'w':
