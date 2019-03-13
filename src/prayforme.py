@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+########## IMPORTS ##########
+
 # for APIs GET request
 import requests
 import json
@@ -37,10 +39,11 @@ from gi.repository import Notify as notify
 # to allow only one instance of the program
 from tendo import singleton
 
-# sleep/resume detection
-import dbus      # for dbus communication (obviously)
+# sleep/resume detection .. dbus interfacing
+import dbus
 from gi.repository import GObject as gobject
-from dbus.mainloop.glib import DBusGMainLoop # integration into the main loop
+# integration into the mainloop
+from dbus.mainloop.glib import DBusGMainLoop
 
 # to check for ubuntu version
 import lsb_release
@@ -48,42 +51,50 @@ import lsb_release
 # to get the absolute path
 import os
 
-##### CONSTANTS #####
+##########################################
+
+
+########## CONSTANTS ##########
+
 KEY_ENTER = 65293
 # KEY_SHIFT = 65505
 # KEY_CTRL  = 65507
 # KEY_CMD   = 65515
 # KEY_SPACE = ' '
 
-prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
+# list of prayers
+PRAYERS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
 
 # paths must be absolute to work at startup
-# path for notification and app thumbnails
-abs_path = '/home/omarcartera/Desktop/prayforme/src/'
+# otherwise the app works from home directory and fails
+# to find the required files.
+ABS_PATH = '/home/omarcartera/Desktop/prayforme/src/'
 
 
 if lsb_release.get_lsb_information()['DESCRIPTION'] == 'Ubuntu 18.10':
 	## for ubuntu 18.10 .. we need an automated check
-	icon_path = abs_path + 'eggw.svg'
+	icon_path = ABS_PATH + 'eggw.svg'
 
 else:
 	## for ubuntu 16.04
-	icon_path = abs_path + 'egg.svg'
+	icon_path = ABS_PATH + 'egg.svg'
 
-mute_icon = abs_path + 'mute.png'
-not_mute_icon = abs_path + 'egg.svg'
+mute_icon = ABS_PATH + 'mute.png'
+not_mute_icon = ABS_PATH + 'egg.svg'
 
 # path for the notification sound
-notification_path = abs_path + 'notification.wav'
+notification_path = ABS_PATH + 'notification.wav'
 
 # notification messages formats
 next_prayer_msg = '{0}, {1} {2}'
 adhan_msg       = 'Time to Adhan: {0}'
 prayer_time_msg = 'Time for {0} {1} {2}'
-#####################
+
+##########################################
 
 
-##### GLOBALS #####
+########## GLOBALS ##########
+
 ls = []
 
 # image for app indicator icon and notification
@@ -94,7 +105,10 @@ muted = False
 
 # to make only one thread alive
 thread_id = 0
-###################
+
+##########################################
+
+########## APP INDICATOR ##########
 
 # app indicator settings
 def gtk_main():
@@ -163,6 +177,10 @@ def mute(source = None):
 
 	muted = not muted
 
+##########################################
+
+
+########## PRAYERS LOGIC ##########
 
 # pops a notification to tell the remaining time
 def what_is_next(source = 0):
@@ -201,6 +219,12 @@ def what_is_next(source = 0):
 	body  = adhan_msg.format(min_to_time(delta))
 
 	show_notification(mode = mode, title = title, body = body)
+
+
+# returns the name of the next prayer based on current
+# time index in the timing list
+def get_next_prayer(times, now_in_minutes):
+	return PRAYERS[times.index(now_in_minutes) % 5]
 
 
 # pop notifications of time remaining to the next prayer
@@ -315,6 +339,10 @@ def prayer_reminder(my_thread_id):
 			# process state: running --> sleep
 			time.sleep(polling_time)
 
+##########################################
+
+
+########## TIME THINGS ##########
 
 # get current time
 def get_now_in_minutes():
@@ -342,11 +370,19 @@ def get_delta_time(now_in_minutes, times):
 	return delta
 
 
-# returns the name of the next prayer based on current
-# time index in the timing list
-def get_next_prayer(times, now_in_minutes):
-	return prayers[times.index(now_in_minutes) % 5]
+# convert hh:mm to integer minutes
+def time_to_min(time):
+	return int(time[:2]) * 60 + int(time[3:])
 
+
+# convert integer minutes to hh:mm
+def min_to_time(min):
+	return str(int((min/60)%24)).zfill(2) + ':' + str(int(min%60)).zfill(2)
+
+##########################################
+
+
+########## APIs ##########
 
 # get your current location based on your public IP
 def get_location_data():
@@ -401,7 +437,7 @@ def get_prayer_times(fajr_correction, country, city):
 
 	for i in range(5):
 		# index of today = today - 1 .. that's how fajr correction works
-		times.append(str(response[now.day - fajr_correction]['timings'][prayers[i]][:5]))
+		times.append(str(response[now.day - fajr_correction]['timings'][PRAYERS[i]][:5]))
 		times[i] = time_to_min(str(times[i]))
 
 	# actual date of these timings, for research reasons
@@ -414,10 +450,14 @@ def get_prayer_times(fajr_correction, country, city):
 	# write down the timing sheet and actual date into a json
 	json_interface('w', dic)
 	
+##########################################
+
+
+########## JSON FILE ##########
 
 # a single function to write/read from the json
 def json_interface(ctrl = 'r', to_write = None):
-	with open(abs_path + 'prayers.json', ctrl) as prayers_file:
+	with open(ABS_PATH + 'prayers.json', ctrl) as prayers_file:
 		if ctrl == 'w':
 			json.dump(to_write, prayers_file)
 
@@ -425,6 +465,10 @@ def json_interface(ctrl = 'r', to_write = None):
 			data = json.load(prayers_file)
 			return data
 
+##########################################
+
+
+########## NOTIFICATIONS ##########
 
 # to play notification sound
 def play():
@@ -453,16 +497,15 @@ def show_notification(mode = None, title = None, body = None, thread = -1):
 	elif mode == 'prayer_time':
 		subprocess.call(['notify-send', '-i', image_path, '-u', 'critical', title + ' - ' + str(thread)])
 
-	
-
-# convert hh:mm to integer minutes
-def time_to_min(time):
-	return int(time[:2]) * 60 + int(time[3:])
+##########################################
 
 
-# convert integer minutes to hh:mm
-def min_to_time(min):
-	return str(int((min/60)%24)).zfill(2) + ':' + str(int(min%60)).zfill(2)
+########## KEYSTROKES DETECTION ##########
+
+# initialize the keyboard monitoring thread
+def listener_fn():
+	with keyboard.Listener(on_press, on_release) as listener:
+		listener.join()
 
 
 # what to do when the buttons combination is pressed
@@ -483,12 +526,6 @@ def on_release(key):
 		ls.remove(str(key))	
 
 
-# initialize the keyboard monitoring thread
-def listener_fn():
-	with keyboard.Listener(on_press, on_release) as listener:
-		listener.join()
-
-
 # sleep and resume detection
 def resume_detection(sleeping):
 	global thread_id
@@ -499,29 +536,17 @@ def resume_detection(sleeping):
 		print('thread', thread_id, 'is on')
 		_thread.start_new_thread(prayer_reminder, (thread_id,))
 
+##########################################
 
-def onButtonPressed(sth1=None, sth2=None):
-	country = lndt_country.get_text()
-	city = lndt_city.get_text()
 
-	window.hide()
-
-	# this blocks the main thread
-	_thread.start_new_thread(gtk_main, ())
-	cont(country, city)
-
-# detecting keypress
-def test(sth1, key):
-	# 65293 is the key value of enter
-	if key.keyval == KEY_ENTER:
-		onButtonPressed()
+########## GTK GUI ##########
 
 # a gui window to ensure country and city from user
 def call_gui():
 	global lndt_country, lndt_city, window
 
 	builder = gtk.Builder()
-	builder.add_from_file(abs_path + "gui_design.glade")
+	builder.add_from_file(ABS_PATH + "gui_design.glade")
 
 	handlers = {
 	    "onButtonPress": onButtonPressed,
@@ -551,6 +576,7 @@ def call_gui():
 	gtk.main()
 
 
+# continue after pressing OK button
 def cont(country, city):
 	# put the prayer times in the json
 	get_prayer_times(1, country, city)
@@ -575,7 +601,29 @@ def cont(country, city):
 		print('***', e, '***')
 
 
-##### MAIN #####
+# handler for pressing OK button
+def onButtonPressed(sth1=None, sth2=None):
+	country = lndt_country.get_text()
+	city = lndt_city.get_text()
+
+	window.hide()
+
+	# this blocks the main thread
+	_thread.start_new_thread(gtk_main, ())
+	cont(country, city)
+
+
+# detecting keypress
+def test(sth1, key):
+	# 65293 is the key value of enter
+	if key.keyval == KEY_ENTER:
+		onButtonPressed()
+
+##########################################
+
+
+########## MAIN ##########
+
 def main():
 	global xml
 	# to make it responsive to CTRL + C signal
@@ -588,6 +636,10 @@ def main():
 
 	call_gui()
 
+##########################################
+
+
+########## PYTHON's MAIN ##########
 
 if __name__ == '__main__':
 	# to limit the program to only one active instance
@@ -598,3 +650,6 @@ if __name__ == '__main__':
 		exit()
 
 	main()
+
+##########################################
+##########################################
