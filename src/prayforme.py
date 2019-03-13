@@ -59,7 +59,7 @@ prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
 
 # paths must be absolute to work at startup
 # path for notification and app thumbnails
-abs_path = os.getcwd() +'/'
+abs_path = '/home/omarcartera/Desktop/prayforme/src/'
 
 
 if lsb_release.get_lsb_information()['DESCRIPTION'] == 'Ubuntu 18.10':
@@ -168,8 +168,7 @@ def mute(source = None):
 def what_is_next(source = 0):
 	# get the prayers timing sheet
 	# also here you need the absolute path
-	with open(abs_path + 'prayers.json', 'r') as prayers_file:
-		data = json.load(prayers_file)
+	data = json_interface(ctrl='r')
 
 	times       = data['times']
 	actual_date = data['actual_date']
@@ -216,8 +215,7 @@ def prayer_reminder(my_thread_id):
 			break
 
 		# get the prayers timing sheet and actual date of the prayer
-		with open(abs_path + 'prayers.json', 'r') as prayers_file:
-			data = json.load(prayers_file)
+		data = json_interface(ctrl='r')
 
 		times       = data['times']
 		actual_date = data['actual_date']
@@ -251,11 +249,11 @@ def prayer_reminder(my_thread_id):
 			corrected = True
 
 			# get the new prayers timing sheet
-			with open(abs_path + 'prayers.json', 'r') as prayers_file:
-				data = json.load(prayers_file)
+			data = json_interface(ctrl='r')
 
-				times = data['times']
-				actual_date = data['actual_date']
+
+			times = data['times']
+			actual_date = data['actual_date']
 		
 
 		elif next_prayer != 'Fajr' and corrected:
@@ -414,9 +412,18 @@ def get_prayer_times(fajr_correction, country, city):
 	dic = {'times': times, 'actual_date': actual_date, 'today': today}
 
 	# write down the timing sheet and actual date into a json
-	with open(abs_path + 'prayers.json', 'w') as prayers_file:
-		json.dump(dic, prayers_file)
+	json_interface('w', dic)
 	
+
+def json_interface(ctrl = 'r', to_write = None):
+	with open(abs_path + 'prayers.json', ctrl) as prayers_file:
+		if ctrl == 'w':
+			json.dump(to_write, prayers_file)
+
+		if ctrl == 'r':
+			data = json.load(prayers_file)
+			return data
+
 
 # to play notification sound
 def play():
