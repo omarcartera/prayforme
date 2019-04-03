@@ -1,0 +1,3 @@
+tendo: sudo pip3 install tendo
+AppIndicator3: sudo apt install gir1.2-appindicator3-0.1
+pynput: sudo pip3 install pynput
