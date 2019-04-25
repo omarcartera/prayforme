@@ -66,13 +66,13 @@ PRAYERS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
 ABS_PATH = '/home/omarcartera/Desktop/repos/prayforme/src/'
 
 
-if lsb_release.get_lsb_information()['DESCRIPTION'] == 'Ubuntu 18.10':
-    ## for ubuntu 18.10 .. we need an automated check
-    ICON_PATH = ABS_PATH + 'eggw.svg'
-
-else:
+if lsb_release.get_distro_information()['DESCRIPTION'] == 'Ubuntu 16.04':
     ## for ubuntu 16.04
     ICON_PATH = ABS_PATH + 'egg.svg'
+
+else:
+    ## for ubuntu 18.10 .. we need an automated check
+    ICON_PATH = ABS_PATH + 'eggw.svg'
 
 MUTE_ICON = ABS_PATH + 'mute.png'
 NOT_MUTE_ICON = ABS_PATH + 'egg.svg'
@@ -508,6 +508,8 @@ def listener_fn():
 
 # what to do when the buttons combination is pressed
 def on_press(key):
+    print('ADD: ', key)
+
     if str(key) in {'Key.ctrl', 'Key.space', 'Key.shift', 'Key.cmd'}:
         LS.append(str(key))
 
@@ -517,9 +519,19 @@ def on_press(key):
     if sorted(LS) == sorted(['Key.ctrl', 'Key.shift', 'Key.cmd']):
         mute()
 
+    else:
+        pass
+
 
 # what to do when the buttons combination is released .. ahem
 def on_release(key):
+    print('REM: ', str(key))
+
+    # I don't know why this returns from left shift?
+    # but until they fix it, here is our little fix
+    if str(key) == '<65032>':
+        LS.remove('Key.shift')
+
     if str(key) in {'Key.ctrl', 'Key.space', 'Key.shift', 'Key.cmd'}:
         LS.remove(str(key))
 
@@ -595,7 +607,7 @@ def cont(country, city):
             'org.freedesktop.login1'            # bus name
         )
 
-        loop = gobject.MainLoop()               # define mainloop
+        loop = GLib.MainLoop()               # define mainloop
         loop.run()                              # run main loop
 
     except Exception:
