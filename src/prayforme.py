@@ -529,11 +529,15 @@ def on_release(key):
 
     # I don't know why this returns from left shift?
     # but until they fix it, here is our little fix
-    if str(key) == '<65032>':
-        LS.remove('Key.shift')
+    try:
+        if str(key) == '<65032>':
+            LS.remove('Key.shift')
 
-    if str(key) in {'Key.ctrl', 'Key.space', 'Key.shift', 'Key.cmd'}:
-        LS.remove(str(key))
+        if str(key) in {'Key.ctrl', 'Key.space', 'Key.shift', 'Key.cmd'}:
+            LS.remove(str(key))
+
+    except Exception as e:
+        print(e)
 
 
 # sleep and resume detection
