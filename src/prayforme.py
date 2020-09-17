@@ -2,7 +2,11 @@
 
 """I think this is docstring"""
 
+
 ########## IMPORTS ##########
+# handle terminating the aplay process when the program exits
+import atexit
+
 # for the delay
 import time
 
@@ -24,6 +28,9 @@ import dbus
 
 # to allow only one instance of the program
 from tendo import singleton
+
+# GObject
+from gi.repository import GObject
 
 # house keeping to stop CLI warnings
 import gi
@@ -52,6 +59,7 @@ import _thread
 ########## CONSTANTS ##########
 
 KEY_ENTER = 65293
+prayNow = False
 # KEY_SHIFT = 65505
 # KEY_CTRL  = 65507
 # KEY_CMD   = 65515
@@ -63,7 +71,7 @@ PRAYERS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
 # paths must be absolute to work at startup
 # otherwise the app works from home directory and fails
 # to find the required files.
-ABS_PATH = '/home/omarcartera/Desktop/repos/prayforme/src/'
+ABS_PATH = '/home/hazem/Desktop/prayforme/src/'
 
 
 if lsb_release.get_distro_information()['DESCRIPTION'] == 'Ubuntu 16.04':
@@ -79,6 +87,8 @@ NOT_MUTE_ICON = ABS_PATH + 'egg.svg'
 
 # path for the notification sound
 NOTIFICATION_PATH = ABS_PATH + 'notification.wav'
+#path for adan sound
+ADAN_PATH = ABS_PATH + 'adan.wav'
 
 # notification messages formats
 NEXT_PRAYER_MSG = '{0}, {1} {2}'
@@ -151,13 +161,14 @@ def build_menu():
 
 # alternative way to CTRL + C to terminate the process
 def gui_quit(source=None, sth=None):
+    PROCESS.terminate()
     exit()
 
 
 # mute/unmute the notifications until next prayer
 def mute(source=None):
     global ITEM_MUTE, MUTED
-
+    PROCESS.terminate()
     if MUTED:
         # to match the correct icon path for this ubuntu version
         image_path = ICON_PATH
@@ -298,7 +309,6 @@ def prayer_reminder(my_thread_id):
         else:
             # we can pray now
             if delta == 0:
-
                 # invoke notification
                 mode = 'prayer_time'
                 title = PRAYER_TIME_MSG.format(next_prayer, today, actual_date)
@@ -469,14 +479,21 @@ def json_interface(ctrl='r', to_write=None):
 ########## NOTIFICATIONS ##########
 
 # to play notification sound
-def play():
-    subprocess.call(['aplay', NOTIFICATION_PATH])
+def play(mode = None):
+    global PROCESS
+    if mode == 'adan':
+        p = subprocess.Popen(['aplay', ADAN_PATH])
+        PROCESS = p
+        p.wait() ; p.terminate()
+    else:
+        p = subprocess.Popen(['aplay', NOTIFICATION_PATH])
+        p.wait() ; p.terminate()
+        
 
 
 # a unified function that shows the popup notification
 def show_notification(mode=None, title=None, body=None):
     global MUTED
-
     # play notification sound in a temporary thread
     # because aplay command is blocking
     # to be synced with the popup notification
@@ -485,8 +502,11 @@ def show_notification(mode=None, title=None, body=None):
 
     else:
         image_path = NOT_MUTE_ICON
-
-        _thread.start_new_thread(play, ())
+        if mode == 'prayer_time':
+            _thread.start_new_thread(play, ('adan',))
+        else:
+            _thread.start_new_thread(play, ())
+                
 
 
     if mode == 'next_prayer':
@@ -654,6 +674,7 @@ def main():
         put a function name instead of the IGN/DFL
         signal.signal(signal.SIGINT, gui_quit)
     '''
+    atexit.register(gui_quit)
 
     # start the thread to listen for keyboard presses
     _thread.start_new_thread(listener_fn, ())
